@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { X, ChevronLeft, ChevronRight, Plus, Trash2, Check, Lock, Unlock, Copy, Share2, MapPin, Calendar, Users, Link } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
 import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
@@ -100,17 +100,20 @@ const makeStyles = (T: Theme) => ({
 
 // ─── Step 1: Info ─────────────────────────────────────────────────────────────
 
-function Step1({ data, set, T }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme }) {
+function Step1({ data, set, T, nameRef, hostRef }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme; nameRef?: React.RefObject<HTMLInputElement | null>; hostRef?: React.RefObject<HTMLInputElement | null> }) {
   const { inp, lbl } = makeStyles(T);
+  const reqStar = <span style={{ color: '#C82718', marginLeft: 2 }}>*</span>;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
-        <label style={lbl}>ROOM NAME *</label>
-        <input style={inp} value={data.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Davao Rotary District 3860" />
+        <label style={lbl}>ROOM NAME {reqStar}</label>
+        <input ref={nameRef} style={{ ...inp, borderColor: !data.name.trim() ? '#FCA5A5' : inp.border as string }} value={data.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Davao Rotary District 3860" />
+        {!data.name.trim() && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Room name is required.</p>}
       </div>
       <div>
-        <label style={lbl}>HOST NAME *</label>
-        <input style={inp} value={data.host_name} onChange={e => set('host_name', e.target.value)} placeholder="e.g. PDG Liza Santos" />
+        <label style={lbl}>HOST NAME {reqStar}</label>
+        <input ref={hostRef} style={{ ...inp, borderColor: !data.host_name.trim() ? '#FCA5A5' : inp.border as string }} value={data.host_name} onChange={e => set('host_name', e.target.value)} placeholder="e.g. PDG Liza Santos" />
+        {!data.host_name.trim() && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Host name is required.</p>}
       </div>
       <div>
         <label style={lbl}>DESCRIPTION</label>
@@ -246,7 +249,7 @@ function Step3({ data, set, T }: { data: WizardData; set: <K extends keyof Wizar
 
 // ─── Step 4: Access ───────────────────────────────────────────────────────────
 
-function Step4({ data, set, T }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme }) {
+function Step4({ data, set, T, passwordRef }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme; passwordRef?: React.RefObject<HTMLInputElement | null> }) {
   const { inp, lbl } = makeStyles(T);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -276,8 +279,18 @@ function Step4({ data, set, T }: { data: WizardData; set: <K extends keyof Wizar
 
         {data.is_private && (
           <div style={{ marginTop: 10 }}>
-            <label style={lbl}>ROOM PASSWORD</label>
-            <input style={inp} type="text" value={data.password} onChange={e => set('password', e.target.value)} placeholder="Set a passcode for joiners" />
+            <label style={lbl}>ROOM PASSWORD <span style={{ color: '#C82718' }}>*</span></label>
+            <input
+              ref={passwordRef}
+              style={{ ...inp, borderColor: data.is_private && !data.password.trim() ? '#FCA5A5' : inp.border as string }}
+              type="text"
+              value={data.password}
+              onChange={e => set('password', e.target.value)}
+              placeholder="Set a passcode for joiners"
+            />
+            {data.is_private && !data.password.trim() && (
+              <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Password is required for private rooms.</p>
+            )}
           </div>
         )}
       </div>
@@ -421,15 +434,23 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
   const [error, setError] = useState('');
   const [createdRoom, setCreatedRoom] = useState<Room | null>(null);
 
+  // Refs for focusing required fields on validation failure
+  const nameRef     = useRef<HTMLInputElement>(null);
+  const hostRef     = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
   const set = <K extends keyof WizardData>(k: K, v: WizardData[K]) =>
     setData(prev => ({ ...prev, [k]: v }));
 
   const validate = (): string => {
     if (step === 0) {
-      if (!data.name.trim()) return 'Room name is required.';
-      if (!data.host_name.trim()) return 'Host name is required.';
+      if (!data.name.trim())      { setTimeout(() => nameRef.current?.focus(), 50); return 'Room name is required.'; }
+      if (!data.host_name.trim()) { setTimeout(() => hostRef.current?.focus(), 50); return 'Host name is required.'; }
     }
-    if (step === 3 && data.is_private && !data.password.trim()) return 'Enter a password for the private room.';
+    if (step === 3 && data.is_private && !data.password.trim()) {
+      setTimeout(() => passwordRef.current?.focus(), 50);
+      return 'Enter a password for the private room.';
+    }
     return '';
   };
 
@@ -469,7 +490,7 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
     }
   };
 
-  const stepProps = { data, set, T };
+  const stepProps = { data, set, T, nameRef, hostRef, passwordRef };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}

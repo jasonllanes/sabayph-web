@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { ArrowRight, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { supabase } from '@/lib/supabase';
@@ -37,6 +37,9 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
   const [pwFocus, setPwFocus] = useState(false);
   const [confirmFocus, setConfirmFocus] = useState(false);
   const [pwDirty, setPwDirty] = useState(false);
+  const emailRef   = useRef<HTMLInputElement>(null);
+  const pwRef      = useRef<HTMLInputElement>(null);
+  const confirmRef = useRef<HTMLInputElement>(null);
 
   const pwResults = PW_RULES.map(r => ({ ...r, pass: r.test(password) }));
   const pwValid = pwResults.every(r => r.pass);
@@ -47,11 +50,14 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
     setError('');
     setPwDirty(true);
 
+    if (!email.trim()) { emailRef.current?.focus(); setError('Email address is required.'); return; }
     if (!pwValid) {
+      pwRef.current?.focus();
       setError('Please add all necessary characters to create safe password.');
       return;
     }
     if (password !== confirmPassword) {
+      confirmRef.current?.focus();
       setError('Passwords do not match.');
       return;
     }
@@ -61,13 +67,20 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
     setLoading(false);
 
     if (authError) {
-      // If the only failure is that Supabase tried to send a confirmation email
-      // (which we don't need), proceed if the user was actually created.
       if (
         authError.message?.toLowerCase().includes('confirmation email') ||
         authError.message?.toLowerCase().includes('sending')
       ) {
         onSignUp((data as any)?.user?.email ?? email);
+        return;
+      }
+      if (
+        authError.message?.toLowerCase().includes('already registered') ||
+        authError.message?.toLowerCase().includes('already been registered') ||
+        authError.message?.toLowerCase().includes('user already exists') ||
+        authError.status === 422
+      ) {
+        setError('This email is already registered. Please sign in instead.');
         return;
       }
       setError(authError.message);
@@ -216,33 +229,33 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <label style={{ fontSize: 13, fontWeight: 600, color: T.text, display: 'block', marginBottom: 6 }}>
-                Email address
+                Email address <span style={{ color: '#C82718' }}>*</span>
               </label>
               <input
+                ref={emailRef}
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onFocus={() => setEmailFocus(true)}
                 onBlur={() => setEmailFocus(false)}
                 placeholder="your@email.com"
-                required
                 style={inputStyle(emailFocus)}
               />
             </div>
 
             <div>
               <label style={{ fontSize: 13, fontWeight: 600, color: T.text, display: 'block', marginBottom: 6 }}>
-                Password
+                Password <span style={{ color: '#C82718' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <input
+                  ref={pwRef}
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={e => { setPassword(e.target.value); setPwDirty(true); }}
                   onFocus={() => setPwFocus(true)}
                   onBlur={() => setPwFocus(false)}
                   placeholder="Create a strong password"
-                  required
                   style={inputStyle(pwFocus, showPwErrors)}
                 />
                 <button
@@ -284,17 +297,17 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
 
             <div>
               <label style={{ fontSize: 13, fontWeight: 600, color: T.text, display: 'block', marginBottom: 6 }}>
-                Confirm password
+                Confirm password <span style={{ color: '#C82718' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <input
+                  ref={confirmRef}
                   type={showConfirm ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   onFocus={() => setConfirmFocus(true)}
                   onBlur={() => setConfirmFocus(false)}
                   placeholder="Re-enter your password"
-                  required
                   style={inputStyle(confirmFocus, !!(confirmPassword && password !== confirmPassword))}
                 />
                 <button
@@ -313,7 +326,12 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
 
             {error && (
               <div style={{ padding: '10px 14px', background: '#FEE2E2', borderRadius: 8, border: '1px solid #FCA5A5' }}>
-                <p style={{ fontSize: 13, color: '#B91C1C', margin: 0 }}>{error}</p>
+                <p style={{ fontSize: 13, color: '#B91C1C', margin: 0 }}>
+                  {error}
+                  {error.includes('already registered') && (
+                    <> <button type="button" onClick={onGoToLogin} style={{ background: 'none', border: 'none', color: '#B91C1C', fontWeight: 700, textDecoration: 'underline', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', padding: 0 }}>Sign in instead →</button></>
+                  )}
+                </p>
               </div>
             )}
 

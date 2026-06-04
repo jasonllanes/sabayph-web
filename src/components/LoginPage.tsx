@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { ArrowRight, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { supabase } from '@/lib/supabase';
@@ -24,9 +24,15 @@ export default function LoginPage({ onLogin, onBack, onGoToSignUp }: LoginPagePr
   const [googleLoading, setGoogleLoading] = useState(false);
   const [emailFocus, setEmailFocus] = useState(false);
   const [pwFocus, setPwFocus] = useState(false);
+  const [touched, setTouched] = useState({ email: false, password: false });
+  const emailRef = useRef<HTMLInputElement>(null);
+  const pwRef    = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched({ email: true, password: true });
+    if (!email.trim())    { emailRef.current?.focus(); setError('Email address is required.'); return; }
+    if (!password.trim()) { pwRef.current?.focus();    setError('Password is required.'); return; }
     setError('');
     setLoading(true);
 
@@ -62,10 +68,10 @@ export default function LoginPage({ onLogin, onBack, onGoToSignUp }: LoginPagePr
     // On success, Supabase redirects the browser — no further action needed
   };
 
-  const inputStyle = (focused: boolean): React.CSSProperties => ({
+  const inputStyle = (focused: boolean, hasError = false): React.CSSProperties => ({
     width: '100%', height: 52, padding: '0 48px 0 16px',
     fontSize: 15, fontFamily: '"DM Sans", system-ui, sans-serif',
-    border: `2px solid ${focused ? T.primary : T.border}`,
+    border: `2px solid ${hasError ? '#C82718' : focused ? T.primary : T.border}`,
     borderRadius: 12, background: T.surface,
     color: T.text, outline: 'none',
     transition: 'border-color 200ms ease',
@@ -185,34 +191,35 @@ export default function LoginPage({ onLogin, onBack, onGoToSignUp }: LoginPagePr
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <label style={{ fontSize: 13, fontWeight: 600, color: T.text, display: 'block', marginBottom: 6 }}>
-                Email address
+                Email address <span style={{ color: '#C82718' }}>*</span>
               </label>
               <input
+                ref={emailRef}
                 type="email"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={e => { setEmail(e.target.value); setTouched(t => ({ ...t, email: true })); }}
                 onFocus={() => setEmailFocus(true)}
                 onBlur={() => setEmailFocus(false)}
                 placeholder="your@email.com"
-                required
-                style={inputStyle(emailFocus)}
+                style={inputStyle(emailFocus, touched.email && !email.trim())}
               />
+              {touched.email && !email.trim() && <p style={{ fontSize: 11, color: '#C82718', margin: '4px 0 0' }}>Email address is required.</p>}
             </div>
 
             <div>
               <label style={{ fontSize: 13, fontWeight: 600, color: T.text, display: 'block', marginBottom: 6 }}>
-                Password
+                Password <span style={{ color: '#C82718' }}>*</span>
               </label>
               <div style={{ position: 'relative' }}>
                 <input
+                  ref={pwRef}
                   type={showPw ? 'text' : 'password'}
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={e => { setPassword(e.target.value); setTouched(t => ({ ...t, password: true })); }}
                   onFocus={() => setPwFocus(true)}
                   onBlur={() => setPwFocus(false)}
                   placeholder="••••••••"
-                  required
-                  style={inputStyle(pwFocus)}
+                  style={inputStyle(pwFocus, touched.password && !password.trim())}
                 />
                 <button
                   type="button"

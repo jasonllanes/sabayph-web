@@ -11,7 +11,7 @@ import { tagStyle, PRONOUNS, getDefaultAvatar } from '@/components/app/tagConsta
 import type { Theme, DiscoverProfile, Connection } from '@/types';
 
 const PROFILE_COLS =
-  'id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat';
+  'id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined';
 
 function normProfile(r: any): DiscoverProfile {
   return {
@@ -21,6 +21,7 @@ function normProfile(r: any): DiscoverProfile {
     rating_count: r.rating_count ?? 0, is_online: r.is_online ?? false,
     profile_completed: r.profile_completed ?? false, contact_phone: r.contact_phone ?? null,
     home_lat: r.home_lat ?? null,
+    rooms_joined: r.rooms_joined ?? 0,
   };
 }
 

@@ -38,6 +38,31 @@ export function useRooms(category = 'rotary') {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'Not authenticated', room: null };
 
+    // Gate 1 — profile must be completed
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('profile_completed')
+      .eq('id', user.id)
+      .single();
+    if (!profile?.profile_completed) {
+      return { error: 'Please complete your profile before creating a room.', room: null };
+    }
+
+    // Gate 2 — max 1 active room per category
+    const now = new Date().toISOString();
+    const { count } = await supabase
+      .from('rooms')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('category', input.category)
+      .gte('event_date', now);
+    if ((count ?? 0) >= 1) {
+      return {
+        error: `You already have an active ${input.category} room. Close or wait for it to end before creating a new one.`,
+        room: null,
+      };
+    }
+
     // Generate join code at insert time so no orphan codes exist
     const joinCode = generateJoinCode();
     const { data, error: err } = await supabase

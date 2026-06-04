@@ -41,7 +41,7 @@ function ConnectButton({ status, loading, connection, onSend, onAccept, onRemove
   }
   if (status === 'pending_sent') {
     return (
-      <button onClick={onRemove} disabled={loading} style={{ ...base, background: T.surfaceAlt, color: T.textMuted, border: `2px solid ${T.border}` }}>
+      <button onClick={onRemove} disabled={loading} className='p-4' style={{ ...base, background: T.surfaceAlt, color: T.textMuted, border: `2px solid ${T.border}` }}>
         <Clock size={17} /> Request sent…
       </button>
     );

@@ -135,6 +135,7 @@ export interface DiscoverProfile {
   profile_completed: boolean;
   contact_phone: string | null;
   home_lat: number | null;
+  rooms_joined: number;
 }
 
 export interface Profile {

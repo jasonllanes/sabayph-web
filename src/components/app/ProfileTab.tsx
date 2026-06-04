@@ -1,4 +1,5 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useRef, lazy, Suspense } from 'react';
+import { getLevelInfo } from '@/lib/levelUtils';
 import type { User } from '@supabase/supabase-js';
 import {
   Users, LogOut, ChevronDown,
@@ -41,6 +42,131 @@ function getVerifySteps(
     { key: 'phone',    label: 'Add phone number',       sub: 'Save your contact number',        done: phoneAdded },
     { key: 'location', label: 'Pin home location',      sub: 'Mark your area on the map',       done: locationPinned },
   ];
+}
+
+// ── Delete account modal ────────────────────────────────────────────────────
+
+function DeleteAccountSection({ onLogout, theme: T }: { onLogout: () => void; theme: any }) {
+  const [open, setOpen]           = useState(false);
+  const [countdown, setCountdown] = useState(5);
+  const [ready, setReady]         = useState(false);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState('');
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const openDialog = () => {
+    setCountdown(5);
+    setReady(false);
+    setError('');
+    setOpen(true);
+    // Auto-start countdown immediately when dialog opens
+    timerRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          setReady(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const closeDialog = () => {
+    clearInterval(timerRef.current!);
+    setOpen(false);
+    setReady(false);
+    setCountdown(5);
+    setError('');
+  };
+
+  const handleDelete = async () => {
+    if (!ready || loading) return;
+    setLoading(true);
+    setError('');
+    const { error: err } = await supabase.rpc('delete_user');
+    if (err) { setError(err.message); setLoading(false); return; }
+    await supabase.auth.signOut();
+    onLogout();
+  };
+
+  return (
+    <>
+      {/* Trigger button */}
+      <button
+        onClick={openDialog}
+        style={{ width: '100%', padding: '14px', borderRadius: 14, border: '1.5px solid #FCA5A5', background: '#FEF2F2', fontFamily: '"DM Sans",system-ui,sans-serif', fontSize: 14, fontWeight: 600, color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'background 150ms ease' }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#FEE2E2')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#FEF2F2')}
+      >
+        🗑️ Delete account
+      </button>
+
+      {/* Modal overlay */}
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          {/* Backdrop */}
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} onClick={closeDialog} />
+
+          {/* Dialog */}
+          <div style={{ position: 'relative', width: '100%', maxWidth: 400, background: '#fff', borderRadius: 20, border: '2px solid #B91C1C', boxShadow: '0 24px 60px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
+            {/* Red header bar */}
+            <div style={{ background: '#B91C1C', padding: '20px 24px 16px', textAlign: 'center' }}>
+              <p style={{ fontSize: 32, margin: '0 0 6px' }}>⚠️</p>
+              <p style={{ fontFamily: '"Bricolage Grotesque",serif', fontSize: 18, fontWeight: 800, color: '#fff', margin: 0 }}>
+                Delete your account?
+              </p>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px 24px 24px' }}>
+              <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.7, margin: '0 0 8px', textAlign: 'center' }}>
+                This will <strong style={{ color: '#B91C1C' }}>permanently delete</strong> your profile,
+                rooms, messages, and all data.
+              </p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: '#B91C1C', textAlign: 'center', margin: '0 0 20px' }}>
+                This action cannot be undone.
+              </p>
+
+              {error && (
+                <div style={{ padding: '10px 14px', background: '#FEE2E2', borderRadius: 10, border: '1px solid #FCA5A5', marginBottom: 14 }}>
+                  <p style={{ fontSize: 12, color: '#B91C1C', margin: 0 }}>{error}</p>
+                </div>
+              )}
+
+              {/* Countdown indicator */}
+              {!ready && (
+                <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 48, height: 48, borderRadius: '50%', border: '3px solid #FCA5A5', background: '#FEF2F2' }}>
+                    <span style={{ fontSize: 20, fontWeight: 800, color: '#B91C1C', fontFamily: '"Bricolage Grotesque",serif' }}>{countdown}</span>
+                  </div>
+                  <p style={{ fontSize: 11, color: '#9CA3AF', margin: '6px 0 0' }}>
+                    Please wait before confirming…
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={closeDialog}
+                  style={{ flex: 1, height: 46, borderRadius: 23, border: '1.5px solid #D1D5DB', background: 'transparent', color: '#374151', fontSize: 14, fontWeight: 600, fontFamily: '"DM Sans",system-ui,sans-serif', cursor: 'pointer' }}
+                >
+                  No, keep it
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={!ready || loading}
+                  style={{ flex: 1, height: 46, borderRadius: 23, border: 'none', background: ready ? '#B91C1C' : '#FCA5A5', color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: '"DM Sans",system-ui,sans-serif', cursor: ready && !loading ? 'pointer' : 'default', transition: 'background 300ms ease' }}
+                >
+                  {loading ? 'Deleting…' : ready ? 'Yes, delete it' : `Yes (${countdown}s)`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 function badgeConfig(count: number) {
@@ -158,6 +284,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
   const [editAgeRange, setEditAgeRange] = useState('');
   const [editGender, setEditGender] = useState('');
   const [editLocation, setEditLocation] = useState('');
+  const [editMapLoc, setEditMapLoc] = useState<import('@/components/common/MapPicker').MapLocation | null>(null);
   const [editLoaded, setEditLoaded] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [savedEdit, setSavedEdit] = useState(false);
@@ -190,6 +317,18 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
   const [savingTags, setSavingTags] = useState(false);
   const [savedTags, setSavedTags] = useState(false);
 
+  // Accordion open states
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [socialOpen, setSocialOpen] = useState(false);
+  const [linksError, setLinksError] = useState('');
+
+  // Scroll refs for inline forms
+  const profileEditRef = useRef<HTMLDivElement>(null);
+  const phoneInputRef  = useRef<HTMLDivElement>(null);
+  const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
+    setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
+  };
+
   // Home location pin (dialog)
   const [locationDialogOpen, setLocationDialogOpen] = useState(false);
   const [pendingLocation, setPendingLocation] = useState<MapLocation | null>(null);
@@ -220,6 +359,9 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
     setEditAgeRange(profile.age_range ?? '');
     setEditGender(profile.gender ?? '');
     setEditLocation(profile.location ?? '');
+    if (profile.location && (profile as any).home_lat != null) {
+      setEditMapLoc({ lat: (profile as any).home_lat, lng: (profile as any).home_lng, name: profile.location });
+    }
     setEditLoaded(true);
   }
   if (profile && !phoneLoaded) {
@@ -269,9 +411,24 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
 
   // ── handlers ──────────────────────────────────────────────────────────────
 
+  const isValidUrl = (val: string) => {
+    if (!val.trim()) return true;
+    try { new URL(val.trim()); return true; } catch { return false; }
+  };
+
   const handleSaveLinks = async () => {
+    setLinksError('');
+    const invalid = [
+      { label: 'Facebook', val: fb },
+      { label: 'Instagram', val: ig },
+      { label: 'Twitter/X', val: tw },
+    ].find(f => !isValidUrl(f.val));
+    if (invalid) {
+      setLinksError(`${invalid.label} URL is not valid. It must start with https://`);
+      return;
+    }
     setSavingLinks(true);
-    await saveProfile({ facebook_url: fb || null, instagram_url: ig || null, twitter_url: tw || null });
+    await saveProfile({ facebook_url: fb.trim() || null, instagram_url: ig.trim() || null, twitter_url: tw.trim() || null });
     setSavingLinks(false); setSavedLinks(true);
     setTimeout(() => setSavedLinks(false), 2500);
   };
@@ -366,6 +523,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
       age_range:         editAgeRange || null,
       gender:            editGender || null,
       location:          editLocation.trim() || null,
+      ...(editMapLoc ? { home_lat: editMapLoc.lat, home_lng: editMapLoc.lng } : {}),
       profile_completed: true,
     } as any);
     setSavingEdit(false);
@@ -499,6 +657,42 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
             </div>
           ))}
         </div>
+
+        {/* Kasama Reputation — inside profile card */}
+        {(() => {
+          const lvl = getLevelInfo(stats.roomsJoined);
+          return (
+            <div style={{ padding: '14px 16px', borderTop: `1px solid ${T.border}`, background: T.surfaceAlt }}>
+              {/* Level row */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div>
+                  <p className="font-display" style={{ fontSize: 13, fontWeight: 700, color: T.text, margin: '0 0 3px' }}>Kasama Reputation</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 8, background: T.primary, color: T.bg }}>Lv.{lvl.level}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{lvl.title}</span>
+                  </div>
+                </div>
+                {stats.kasamaRating !== null && (
+                  <span style={{ fontSize: 11, color: T.textMuted }}>⭐ {stats.kasamaRating.toFixed(1)}</span>
+                )}
+              </div>
+
+              {/* XP bar */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: T.primary }}>{lvl.xp} XP</span>
+                {!lvl.isMax && <span style={{ fontSize: 10, color: T.textMuted }}>{lvl.xpForNext} XP · Lv.{lvl.level + 1}</span>}
+              </div>
+              <div style={{ background: T.border, borderRadius: 6, height: 8, overflow: 'hidden', marginBottom: 5 }}>
+                <div style={{ height: '100%', borderRadius: 6, width: `${lvl.progress}%`, background: lvl.isMax ? '#15803D' : T.primary, transition: 'width 800ms ease' }} />
+              </div>
+              <p style={{ fontSize: 11, color: T.textMuted, margin: 0 }}>
+                {lvl.isMax
+                  ? '🏆 Max level reached — true Haligi ng Komunidad!'
+                  : `${lvl.xpForNext - lvl.xp} XP to Level ${lvl.level + 1} · earn 10 XP per room joined`}
+              </p>
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── Tags & Pronouns ── */}
@@ -574,19 +768,28 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
 
       {/* ── Verification Progress ── */}
       <div style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 18, overflow: 'hidden', marginBottom: 16 }}>
-        <div style={{ padding: '14px 16px 10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <div>
-              <p style={{ fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 1px' }}>Verification Progress</p>
-              <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>{doneCount}/4 steps complete</p>
-            </div>
-            <div style={{ padding: '4px 12px', borderRadius: 20, background: badge.bg, border: `1px solid ${badge.border}` }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer', transition: 'background 150ms' }}
+          onClick={() => setVerifyOpen(o => !o)}
+          onMouseEnter={e => (e.currentTarget.style.background = T.surfaceAlt)}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 1px' }}>Verification Progress</p>
+            <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>{doneCount}/4 steps complete</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ padding: '4px 10px', borderRadius: 20, background: badge.bg, border: `1px solid ${badge.border}` }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: badge.color }}>{doneCount === 4 ? 'Verified ✓' : `${doneCount}/4`}</span>
             </div>
+            <ChevronDown size={16} style={{ color: T.textMuted, transition: 'transform 200ms', transform: verifyOpen ? 'rotate(180deg)' : 'none', flexShrink: 0 }} />
           </div>
-
+        </div>
+        {verifyOpen && (
+          <>
+          <div style={{ padding: '0 16px 10px', borderTop: `1px solid ${T.border}` }}>
           {/* Progress bar */}
-          <div style={{ background: T.surfaceAlt, borderRadius: 6, height: 8, overflow: 'hidden', marginBottom: 14 }}>
+          <div style={{ background: T.surfaceAlt, borderRadius: 6, height: 8, overflow: 'hidden', margin: '14px 0' }}>
             <div style={{ height: '100%', borderRadius: 6, width: `${(doneCount / 4) * 100}%`, background: doneCount === 4 ? '#15803D' : doneCount >= 2 ? '#EAB308' : doneCount === 1 ? T.highlight : T.border, transition: 'width 600ms ease' }} />
           </div>
 
@@ -605,32 +808,32 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
                   <p style={{ fontSize: 11, color: T.textMuted, margin: 0 }}>{step.sub}</p>
                 </div>
                 {step.key === 'profile' && (
-                  <button onClick={() => { setProfileEditOpen(o => !o); setEditError(''); }}
-                    style={{ padding: '5px 11px', borderRadius: 16, fontSize: 11, fontWeight: 600, border: `1.5px solid ${step.done ? '#86EFAC' : T.primary}`, background: step.done ? '#DCFCE7' : 'transparent', color: step.done ? '#15803D' : T.primary, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  <button onClick={() => { setProfileEditOpen(o => !o); setEditError(''); scrollToRef(profileEditRef); }}
+                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: step.done ? '#DCFCE7' : T.highlight, color: step.done ? '#15803D' : '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     {step.done ? 'Edit' : 'Set up'}
                   </button>
                 )}
                 {!step.done && step.key === 'email' && (
                   <button onClick={handleResendEmail} disabled={emailResendLoading || emailResendDone}
-                    style={{ padding: '5px 11px', borderRadius: 16, fontSize: 11, fontWeight: 600, border: `1.5px solid ${T.primary}`, background: emailResendDone ? '#DCFCE7' : 'transparent', color: emailResendDone ? '#15803D' : T.primary, cursor: emailResendDone ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: emailResendDone ? '#DCFCE7' : T.highlight, color: emailResendDone ? '#15803D' : '#06131B', cursor: emailResendDone ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     {emailResendDone ? '✓ Sent' : emailResendLoading ? '…' : 'Resend'}
                   </button>
                 )}
                 {!step.done && step.key === 'phone' && !phoneInputOpen && (
-                  <button onClick={() => { setPhoneInputOpen(true); setPhoneError(''); }}
-                    style={{ padding: '5px 11px', borderRadius: 16, fontSize: 11, fontWeight: 600, border: `1.5px solid ${T.primary}`, background: 'transparent', color: T.primary, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  <button onClick={() => { setPhoneInputOpen(true); setPhoneError(''); scrollToRef(phoneInputRef); }}
+                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: T.highlight, color: '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     Add
                   </button>
                 )}
                 {step.done && step.key === 'phone' && (
-                  <button onClick={() => { setPhoneInputOpen(o => !o); setPhoneError(''); }}
-                    style={{ padding: '5px 11px', borderRadius: 16, fontSize: 11, fontWeight: 600, border: `1.5px solid #86EFAC`, background: '#DCFCE7', color: '#15803D', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  <button onClick={() => { setPhoneInputOpen(o => !o); setPhoneError(''); scrollToRef(phoneInputRef); }}
+                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: '#DCFCE7', color: '#15803D', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     Edit
                   </button>
                 )}
                 {step.key === 'location' && (
                   <button onClick={() => { setLocationDialogOpen(true); setLocationError(''); }}
-                    style={{ padding: '5px 11px', borderRadius: 16, fontSize: 11, fontWeight: 600, border: `1.5px solid ${step.done ? '#86EFAC' : T.primary}`, background: step.done ? '#DCFCE7' : 'transparent', color: step.done ? '#15803D' : T.primary, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: step.done ? '#DCFCE7' : T.highlight, color: step.done ? '#15803D' : '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
                     {step.done ? 'Edit' : 'Pin'}
                   </button>
                 )}
@@ -641,7 +844,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
 
         {/* ── Inline profile edit ── */}
         {profileEditOpen && (
-          <div style={{ margin: '0 16px 16px', padding: 16, background: T.surfaceAlt, borderRadius: 14 }}>
+          <div ref={profileEditRef} style={{ margin: '0 16px 16px', padding: 16, background: T.surfaceAlt, borderRadius: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: T.text, margin: 0 }}>Edit your profile</p>
               <button onClick={() => setProfileEditOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex' }}>
@@ -652,7 +855,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Name */}
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>DISPLAY NAME *</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>DISPLAY NAME <span style={{ color: '#C82718' }}>*</span></label>
                 <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="What should we call you?" maxLength={40}
                   style={{ ...inputSt, height: 42 }} />
               </div>
@@ -683,11 +886,20 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
                 </div>
               </div>
 
-              {/* City */}
+              {/* City / Area — map picker */}
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>CITY / AREA</label>
-                <input value={editLocation} onChange={e => setEditLocation(e.target.value)} placeholder="e.g. Cagayan de Oro, Davao…" maxLength={60}
-                  style={{ ...inputSt, height: 42 }} />
+                <Suspense fallback={
+                  <input value={editLocation} onChange={e => setEditLocation(e.target.value)} placeholder="e.g. Cagayan de Oro, Davao…" maxLength={60}
+                    style={{ ...inputSt, height: 42 }} />
+                }>
+                  <MapPicker
+                    value={editMapLoc}
+                    onChange={loc => { setEditMapLoc(loc); setEditLocation(loc.name.split(',').slice(0, 2).join(', ')); }}
+                    height={220}
+                    theme={{ primary: T.primary, bg: T.bg, surface: T.surface, surfaceAlt: T.surfaceAlt, text: T.text, textMuted: T.textMuted, border: T.border } as MapPickerTheme}
+                  />
+                </Suspense>
               </div>
 
               {/* Bio */}
@@ -712,7 +924,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
 
         {/* Inline phone input — no OTP */}
         {phoneInputOpen && (
-          <div style={{ margin: '0 16px 16px', padding: 14, background: T.surfaceAlt, borderRadius: 12 }}>
+          <div ref={phoneInputRef} style={{ margin: '0 16px 16px', padding: 14, background: T.surfaceAlt, borderRadius: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: T.text, margin: 0 }}>
                 {phoneAdded ? 'Update phone number' : 'Add your phone number'}
@@ -751,41 +963,15 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
         )}
 
         {savedLocation && (
-          <div style={{ margin: '0 16px 16px', padding: '10px 14px', background: '#DCFCE7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ margin: '0 16px 8px', padding: '10px 14px', background: '#DCFCE7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
             <ShieldCheck size={16} style={{ color: '#15803D' }} />
             <p style={{ fontSize: 13, fontWeight: 600, color: '#15803D', margin: 0 }}>Home location saved!</p>
           </div>
         )}
-      </div>
-
-      {/* ── Kasama Reputation ── */}
-      <div style={{ padding: 16, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 18, marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-          <div>
-            <p className="font-display" style={{ fontSize: 15, fontWeight: 700, color: T.text, margin: '0 0 2px' }}>Kasama Reputation</p>
-            <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>
-              {stats.kasamaRating !== null ? `${stats.ratingCount} rating${stats.ratingCount !== 1 ? 's' : ''} · avg ${stats.kasamaRating.toFixed(1)}` : 'Level 1 — Building trust'}
-            </p>
-          </div>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: T.surfaceAlt, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Users size={20} style={{ color: T.primary }} />
-          </div>
-        </div>
-        <div style={{ background: T.surfaceAlt, borderRadius: 6, height: 8, overflow: 'hidden' }}>
-          <div style={{ height: '100%', borderRadius: 6, width: `${Math.min((stats.roomsJoined / 20) * 100, 100)}%`, background: T.primary, transition: 'width 800ms ease' }} />
-        </div>
-        <p style={{ fontSize: 11, color: T.textMuted, margin: '6px 0 0' }}>
-          {stats.roomsJoined === 0
-            ? 'Join your first room to start building reputation'
-            : stats.roomsJoined < 5
-            ? `Join ${5 - stats.roomsJoined} more room${5 - stats.roomsJoined !== 1 ? 's' : ''} to reach Level 2`
-            : `${stats.roomsJoined} rooms joined · keep going!`
-          }
-        </p>
-        {stats.kasamaRating === null && (
-          <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 0', fontStyle: 'italic' }}>Ratings appear after others rate your hosting</p>
+          </>
         )}
       </div>
+
 
       {/* ── Settings ── */}
       <div style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 18, overflow: 'hidden', marginBottom: 16 }}>
@@ -899,58 +1085,75 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
         </div>
       </div>
 
-      {/* ── Social links ── */}
-      <div style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 18, padding: 16, marginBottom: 16 }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: T.text, margin: '0 0 4px' }}>Contact & Social Links</p>
-        <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 14px', lineHeight: 1.5 }}>These auto-fill when you create a room.</p>
-
-        {/* Default contact info from account */}
-        <div style={{ marginBottom: 14, padding: '10px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1.5px solid ${T.border}` }}>
-          <p style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, margin: '0 0 8px', letterSpacing: 0.5 }}>DEFAULT CONTACT (from your account)</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: `${T.primary}18`, border: `1.5px solid ${T.primary}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <AtSign size={14} color={T.primary} />
-              </div>
-              <div style={{ flex: 1, height: 36, padding: '0 10px', fontSize: 13, border: `1.5px solid ${T.border}`, borderRadius: 8, background: T.surface, color: T.text, display: 'flex', alignItems: 'center', opacity: 0.85 }}>
-                {user.email || 'No email on account'}
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8, background: `#16A34A18`, border: `1.5px solid #16A34A44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Phone size={14} color="#16A34A" />
-              </div>
-              <div style={{ flex: 1, height: 36, padding: '0 10px', fontSize: 13, border: `1.5px solid ${T.border}`, borderRadius: 8, background: T.surface, color: currentPhone ? T.text : T.textMuted, display: 'flex', alignItems: 'center', opacity: 0.85 }}>
-                {currentPhone || 'No phone — add one in Verification'}
-              </div>
-            </div>
+      {/* ── Contact & Social Links accordion ── */}
+      <div style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 18, overflow: 'hidden', marginBottom: 16 }}>
+        <div
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', cursor: 'pointer', transition: 'background 150ms' }}
+          onClick={() => setSocialOpen(o => !o)}
+          onMouseEnter={e => (e.currentTarget.style.background = T.surfaceAlt)}
+          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+        >
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 1px' }}>Contact & Social Links</p>
+            <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>These auto-fill when you create a room</p>
           </div>
+          <ChevronDown size={16} style={{ color: T.textMuted, transition: 'transform 200ms', transform: socialOpen ? 'rotate(180deg)' : 'none', flexShrink: 0 }} />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-          {[
-            { val: fb, set: setFb, Icon: FacebookIcon, placeholder: 'https://facebook.com/yourpage', color: '#1877F2' },
-            { val: ig, set: setIg, Icon: InstagramIcon, placeholder: 'https://instagram.com/yourhandle', color: '#E4405F' },
-            { val: tw, set: setTw, Icon: TwitterIcon, placeholder: 'https://x.com/yourhandle', color: '#1DA1F2' },
-          ].map(({ val, set, Icon, placeholder, color }, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}18`, border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Icon size={16} color={color} />
+        {socialOpen && (
+          <div style={{ padding: '0 16px 16px', borderTop: `1px solid ${T.border}`, background: T.surfaceAlt }}>
+            {/* Default contact */}
+            <div style={{ margin: '14px 0', padding: '10px 12px', borderRadius: 12, background: T.surface, border: `1.5px solid ${T.border}` }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, margin: '0 0 8px', letterSpacing: 0.5 }}>DEFAULT CONTACT (from your account)</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: `${T.primary}18`, border: `1.5px solid ${T.primary}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <AtSign size={14} color={T.primary} />
+                  </div>
+                  <div style={{ flex: 1, height: 36, padding: '0 10px', fontSize: 13, border: `1.5px solid ${T.border}`, borderRadius: 8, background: T.bg, color: T.text, display: 'flex', alignItems: 'center', opacity: 0.85 }}>
+                    {user.email || 'No email on account'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: `#16A34A18`, border: `1.5px solid #16A34A44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Phone size={14} color="#16A34A" />
+                  </div>
+                  <div style={{ flex: 1, height: 36, padding: '0 10px', fontSize: 13, border: `1.5px solid ${T.border}`, borderRadius: 8, background: T.bg, color: currentPhone ? T.text : T.textMuted, display: 'flex', alignItems: 'center', opacity: 0.85 }}>
+                    {currentPhone || 'No phone — add one in Verification'}
+                  </div>
+                </div>
               </div>
-              <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
-                style={{ flex: 1, height: 40, padding: '0 12px', fontSize: 13, fontFamily: '"DM Sans",system-ui,sans-serif', border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.bg, color: T.text, outline: 'none', boxSizing: 'border-box' as const }}
-              />
             </div>
-          ))}
-        </div>
-        <button onClick={handleSaveLinks} disabled={savingLinks} style={{ width: '100%', height: 42, borderRadius: 21, border: 'none', background: savedLinks ? '#15803D' : T.primary, color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: '"DM Sans",system-ui,sans-serif', cursor: savingLinks ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, transition: 'background 250ms ease' }}>
-          {savedLinks ? <><Check size={15} /> Saved!</> : savingLinks ? 'Saving…' : <><Save size={15} /> Save Social Links</>}
-        </button>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+              {[
+                { val: fb, set: setFb, Icon: FacebookIcon, placeholder: 'https://facebook.com/yourpage', color: '#1877F2' },
+                { val: ig, set: setIg, Icon: InstagramIcon, placeholder: 'https://instagram.com/yourhandle', color: '#E4405F' },
+                { val: tw, set: setTw, Icon: TwitterIcon, placeholder: 'https://x.com/yourhandle', color: '#1DA1F2' },
+              ].map(({ val, set, Icon, placeholder, color }, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}18`, border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Icon size={16} color={color} />
+                  </div>
+                  <input value={val} onChange={e => { set(e.target.value); setLinksError(''); }} placeholder={placeholder}
+                    style={{ flex: 1, height: 40, padding: '0 12px', fontSize: 13, fontFamily: '"DM Sans",system-ui,sans-serif', border: `1.5px solid ${val && !isValidUrl(val) ? '#FCA5A5' : T.border}`, borderRadius: 10, background: T.surface, color: T.text, outline: 'none', boxSizing: 'border-box' as const }}
+                  />
+                </div>
+              ))}
+            </div>
+            {linksError && <p style={{ fontSize: 12, color: '#B91C1C', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '7px 10px', margin: '0 0 10px' }}>{linksError}</p>}
+            <button onClick={handleSaveLinks} disabled={savingLinks} style={{ width: '100%', height: 42, borderRadius: 21, border: 'none', background: savedLinks ? '#15803D' : T.primary, color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: '"DM Sans",system-ui,sans-serif', cursor: savingLinks ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, transition: 'background 250ms ease' }}>
+              {savedLinks ? <><Check size={15} /> Saved!</> : savingLinks ? 'Saving…' : <><Save size={15} /> Save Social Links</>}
+            </button>
+          </div>
+        )}
       </div>
 
-      <button onClick={onLogout} style={{ width: '100%', padding: '14px', borderRadius: 14, border: '1.5px solid #FCA5A5', background: '#FEF2F2', fontFamily: '"DM Sans",system-ui,sans-serif', fontSize: 14, fontWeight: 600, color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'background 150ms ease' }}
-        onMouseEnter={e => (e.currentTarget.style.background = '#FEE2E2')}
-        onMouseLeave={e => (e.currentTarget.style.background = '#FEF2F2')}
+      <DeleteAccountSection onLogout={onLogout} theme={T} />
+
+      <button onClick={onLogout} style={{ width: '100%', padding: '14px', borderRadius: 14, border: `1.5px solid ${T.border}`, background: 'transparent', fontFamily: '"DM Sans",system-ui,sans-serif', fontSize: 14, fontWeight: 600, color: T.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'background 150ms ease' }}
+        onMouseEnter={e => (e.currentTarget.style.background = `${T.text}08`)}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       >
         <LogOut size={17} /> Sign out
       </button>

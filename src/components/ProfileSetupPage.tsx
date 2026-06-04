@@ -50,6 +50,7 @@ interface ProfileSetupPageProps {
 
 export default function ProfileSetupPage({ userId, initialName = '', onDone }: ProfileSetupPageProps) {
   const [displayName, setDisplayName]   = useState(initialName);
+  const nameRef = useRef<HTMLInputElement>(null);
   const [ageRange, setAgeRange]         = useState('');
   const [bio, setBio]                   = useState('');
   const [gender, setGender]             = useState('');
@@ -147,7 +148,7 @@ export default function ProfileSetupPage({ userId, initialName = '', onDone }: P
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!displayName.trim()) { setError('Please enter a display name.'); return; }
+    if (!displayName.trim()) { nameRef.current?.focus(); setError('Please enter a display name.'); return; }
     setError('');
     setLoading(true);
 
@@ -169,10 +170,10 @@ export default function ProfileSetupPage({ userId, initialName = '', onDone }: P
     onDone();
   };
 
-  const inputStyle = (focused: boolean): React.CSSProperties => ({
+  const inputStyle = (focused: boolean, hasError = false): React.CSSProperties => ({
     width: '100%', height: 52, padding: '0 16px',
     fontSize: 15, fontFamily: '"DM Sans", system-ui, sans-serif',
-    border: `2px solid ${focused ? T.primary : T.border}`,
+    border: `2px solid ${hasError ? '#C82718' : focused ? T.primary : T.border}`,
     borderRadius: 12, background: T.surface,
     color: T.text, outline: 'none',
     transition: 'border-color 200ms ease',
@@ -222,6 +223,7 @@ export default function ProfileSetupPage({ userId, initialName = '', onDone }: P
                 <User size={14} /> Display Name <span style={{ color: T.accent }}>*</span>
               </label>
               <input
+                ref={nameRef}
                 type="text"
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
@@ -229,9 +231,9 @@ export default function ProfileSetupPage({ userId, initialName = '', onDone }: P
                 onBlur={() => setNameFocus(false)}
                 placeholder="What should we call you?"
                 maxLength={40}
-                required
-                style={inputStyle(nameFocus)}
+                style={inputStyle(nameFocus, !displayName.trim())}
               />
+              {!displayName.trim() && <p style={{ fontSize: 11, color: '#C82718', margin: '4px 0 0' }}>Display name is required.</p>}
             </div>
 
             {/* Age Range */}

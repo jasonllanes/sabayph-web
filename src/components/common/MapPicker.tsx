@@ -95,7 +95,7 @@ export default function MapPicker({ value, onChange, height = 300, theme }: MapP
   const C: MapPickerTheme = { ...LIGHT, ...theme };
 
   const [showMap, setShowMap] = useState(false);
-  const [query, setQuery] = useState(value?.name ?? '');
+  const [query, setQuery] = useState(value?.name ? shortName(value.name) : '');
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -131,7 +131,7 @@ export default function MapPicker({ value, onChange, height = 300, theme }: MapP
   const selectSuggestion = (s: NominatimResult) => {
     const loc: MapLocation = { lat: parseFloat(s.lat), lng: parseFloat(s.lon), name: s.display_name };
     onChange(loc);
-    setQuery(s.display_name);
+    setQuery(shortName(s.display_name));
     setSuggestions([]);
     setShowSuggestions(false);
     setDraftCenter([loc.lat, loc.lng]);
@@ -165,7 +165,7 @@ export default function MapPicker({ value, onChange, height = 300, theme }: MapP
   const confirmMapLocation = () => {
     const loc: MapLocation = { lat: draftCenter[0], lng: draftCenter[1], name: draftAddress };
     onChange(loc);
-    setQuery(draftAddress);
+    setQuery(shortName(draftAddress));
     setShowMap(false);
   };
 
@@ -336,23 +336,11 @@ export default function MapPicker({ value, onChange, height = 300, theme }: MapP
         </div>
       )}
 
-      {/* Selected location badge when map is closed */}
-      {!showMap && value && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-          borderRadius: 10, background: `${C.primary}12`, border: `1px solid ${C.primary}30`,
-        }}>
-          <MapPin size={13} style={{ color: C.primary, flexShrink: 0 }} />
-          <p style={{ fontSize: 12, color: C.text, margin: 0, fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {value.name}
-          </p>
-          <button
-            onClick={() => { onChange({ lat: value.lat, lng: value.lng, name: '' }); setQuery(''); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, display: 'flex', padding: 2 }}
-          >
-            <X size={13} />
-          </button>
-        </div>
+      {/* Confirmed location indicator */}
+      {!showMap && value?.name && (
+        <p style={{ fontSize: 11, color: C.primary, margin: 0, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+          <MapPin size={11} /> {shortName(value.name)}
+        </p>
       )}
     </div>
   );

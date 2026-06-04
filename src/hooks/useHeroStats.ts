@@ -20,7 +20,7 @@ export function useHeroStats() {
 
     const liveIds = new Set(CATEGORIES.filter(c => c.status === 'live').map(c => c.id));
     const categoriesWithRooms = new Set<string>(
-      (roomsRes.data ?? []).map((r: any) => r.category).filter((cat: string) => liveIds.has(cat))
+      (roomsRes.data ?? []).map((r: any) => r.category).filter((cat: any) => liveIds.has(cat))
     );
 
     setStats({

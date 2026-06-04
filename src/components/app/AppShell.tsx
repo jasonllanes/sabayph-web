@@ -15,6 +15,7 @@ import ProfileTab from './ProfileTab';
 import FriendsTab from './FriendsTab';
 import MessagesTab from './MessagesTab';
 import { useUnreadCount } from '@/hooks/useMessages';
+import { usePendingFriendsCount, usePendingRoomsCount } from '@/hooks/useBadgeCounts';
 
 // Splash screen dark palette applied on top of any theme
 const DARK: Partial<Theme> = {
@@ -39,6 +40,8 @@ const GLOBAL_STYLE = `
   .float-soft  { animation: float-soft 4s ease-in-out infinite; }
   @keyframes fade-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
   .fade-rise   { animation: fade-rise 500ms ease-out both; }
+  @keyframes tab-enter { from { opacity: 0; } to { opacity: 1; } }
+  .tab-enter   { animation: tab-enter 220ms ease-out both; }
   * { box-sizing: border-box; }
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -60,7 +63,16 @@ interface AppShellProps {
 }
 
 export default function AppShell({ user, onLogout }: AppShellProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('discover');
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const saved = localStorage.getItem('sabayph_active_tab') as TabId | null;
+    const valid: TabId[] = ['discover', 'rooms', 'explore', 'friends', 'messages', 'profile'];
+    return saved && valid.includes(saved) ? saved : 'discover';
+  });
+
+  const handleTabChange = (tab: TabId) => {
+    setActiveTab(tab);
+    localStorage.setItem('sabayph_active_tab', tab);
+  };
   const [activeCategory, setActiveCategory] = useState<ThemeKey>('heritage');
   const [exploreCategory, setExploreCategory] = useState<import('@/types').CategoryId | null>(null);
   const { isMobile } = useScreenSize();
@@ -72,6 +84,8 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
 
   const { profile } = useProfile(user?.id);
   const unreadMessages = useUnreadCount(user?.id);
+  const pendingFriends = usePendingFriendsCount(user?.id);
+  const pendingRooms   = usePendingRoomsCount(user?.id);
   const userEmail = user?.email ?? user?.user_metadata?.email ?? 'kasama@sabayph.com';
   const googleName: string = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
   const userName = profile?.display_name || googleName || userEmail.split('@')[0];
@@ -126,7 +140,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
           onLogout={onLogout}
         />
       );
-      default: return <DiscoverTab theme={theme} activeCategory={activeCategory} onCategoryChange={onCategoryChange} userId={user?.id} onBrowseCategory={cat => { setExploreCategory(cat); setActiveTab('explore'); }} />;
+      default: return <DiscoverTab theme={theme} activeCategory={activeCategory} onCategoryChange={onCategoryChange} userId={user?.id} onBrowseCategory={cat => { setExploreCategory(cat); handleTabChange('explore'); }} />;
     }
   };
 
@@ -146,7 +160,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
             <DarkToggle />
             <div
               style={{ width: 34, height: 34, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: `2px solid ${theme.border}`, overflow: 'hidden', position: 'relative', flexShrink: 0 }}
-              onClick={() => setActiveTab('profile')}
+              onClick={() => handleTabChange('profile')}
               title={userName}
             >
               <img src={displayAvatar} alt={userName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).src = localAvatar; }} />
@@ -155,10 +169,12 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}>
-          {renderTab()}
+          <div key={activeTab} className="tab-enter">
+            {renderTab()}
+          </div>
         </div>
 
-        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} theme={theme} unreadMessages={unreadMessages} />
+        <BottomNav activeTab={activeTab} onTabChange={handleTabChange} theme={theme} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} profileCompleted={!!profile?.profile_completed} />
       </div>
     );
   }
@@ -167,7 +183,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: theme.bg, color: theme.text, fontFamily: '"DM Sans", system-ui, sans-serif', transition: 'background 600ms ease, color 600ms ease' }}>
       <style>{GLOBAL_STYLE}</style>
 
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} theme={theme} user={{ email: userEmail, name: userName, avatarUrl: displayAvatar, gender: profile?.gender }} onLogout={onLogout} unreadMessages={unreadMessages} />
+      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} theme={theme} user={{ email: userEmail, name: userName, avatarUrl: displayAvatar, gender: profile?.gender }} onLogout={onLogout} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} profileCompleted={!!profile?.profile_completed} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', background: theme.surface, borderBottom: `1.5px solid ${theme.border}`, transition: 'all 600ms ease' }}>
@@ -191,7 +207,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
             </div>
             <div
               style={{ width: 40, height: 40, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 17, border: `2px solid ${theme.border}`, cursor: 'pointer', flexShrink: 0, overflow: 'hidden', position: 'relative' }}
-              onClick={() => setActiveTab('profile')}
+              onClick={() => handleTabChange('profile')}
             >
               <img src={displayAvatar} alt={userName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).src = localAvatar; }} />
             </div>
@@ -199,7 +215,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-          <div style={{ maxWidth: activeTab === 'discover' ? 900 : 800, margin: '0 auto', padding: '0 16px' }}>
+          <div key={activeTab} className="tab-enter" style={{ maxWidth: activeTab === 'discover' ? 900 : 800, margin: '0 auto', padding: '0 16px' }}>
             {renderTab()}
           </div>
         </div>

@@ -35,11 +35,11 @@ export function useRoomJoinRequests(ownedRoomIds: string[]) {
     await Promise.all([
       supabase.from('join_requests').update({ status: 'approved' }).eq('id', req.id),
       supabase.from('room_members').upsert({ room_id: req.room_id, user_id: req.user_id }, { onConflict: 'room_id,user_id' }),
-      supabase.rpc('increment_member_count', { room_id_input: req.room_id }).catch(() =>
-        supabase.from('rooms').select('member_count').eq('id', req.room_id).single().then(({ data }) =>
+      supabase.rpc('increment_member_count', { room_id_input: req.room_id }).then(({ error }) => {
+        if (error) return supabase.from('rooms').select('member_count').eq('id', req.room_id).single().then(({ data }) =>
           supabase.from('rooms').update({ member_count: (data?.member_count ?? 0) + 1 }).eq('id', req.room_id)
-        )
-      ),
+        );
+      }),
     ]);
     await refresh();
   };

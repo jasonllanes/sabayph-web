@@ -7,6 +7,7 @@ import { useConnections } from '@/hooks/useConnections';
 import { useHeroStats } from '@/hooks/useHeroStats';
 import ProfileViewModal from '@/components/app/ProfileViewModal';
 import { tagStyle, getDefaultAvatar } from '@/components/app/tagConstants';
+import { getLevelInfo } from '@/lib/levelUtils';
 import type { Theme, ThemeKey, DiscoverProfile, CategoryId } from '@/types';
 
 interface DiscoverTabProps {
@@ -47,6 +48,7 @@ function PersonCard({ person, theme: T, onView }: { person: DiscoverProfile; the
   const badge = miniProfileBadge(person);
   const BadgeIcon = badge.Icon;
   const emoji = genderEmoji(pronounTag);
+  const lvl = getLevelInfo(person.rooms_joined ?? 0);
 
   return (
     <button
@@ -91,10 +93,18 @@ function PersonCard({ person, theme: T, onView }: { person: DiscoverProfile; the
           <p style={{ fontSize: 14, fontWeight: 800, color: T.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: '"Bricolage Grotesque",serif', flex: 1, minWidth: 0 }}>
             {person.display_name ?? 'Kasama'}
           </p>
-          {/* Badge icon only — no text */}
           <BadgeIcon size={13} style={{ color: badge.color, flexShrink: 0 }} />
-          {/* Gender emoji */}
           {emoji && <span style={{ fontSize: 13, flexShrink: 0 }}>{emoji}</span>}
+        </div>
+
+        {/* Level badge */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 8, background: T.primary, color: T.bg, letterSpacing: 0.3, flexShrink: 0 }}>
+            Lv.{lvl.level}
+          </span>
+          <span style={{ fontSize: 10, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {lvl.title}
+          </span>
         </div>
 
         {/* Location */}
