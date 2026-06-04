@@ -3,16 +3,16 @@ import type { User } from '@supabase/supabase-js';
 import { Moon, Sun } from 'lucide-react';
 import { useScreenSize } from '@/hooks/useScreenSize';
 import { useDarkMode } from '@/hooks/useDarkMode';
+import { useProfile } from '@/hooks/useProfile';
 import { THEMES } from '@/data/themes';
 import type { Theme, ThemeKey } from '@/types';
-import BottomNav from './BottomNav';
+import BottomNav, { type TabId } from './BottomNav';
 import Sidebar from './Sidebar';
 import DiscoverTab from './DiscoverTab';
 import RoomsTab from './RoomsTab';
 import ExploreTab from './ExploreTab';
 import ProfileTab from './ProfileTab';
-
-type TabId = 'discover' | 'rooms' | 'explore' | 'profile';
+import FriendsTab from './FriendsTab';
 
 // Splash screen dark palette applied on top of any theme
 const DARK: Partial<Theme> = {
@@ -47,6 +47,7 @@ const TAB_LABELS: Record<TabId, string> = {
   discover: 'Discover',
   rooms:    'My Rooms',
   explore:  'Explore',
+  friends:  'Friends',
   profile:  'Profile',
 };
 
@@ -61,12 +62,15 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
   const { isMobile } = useScreenSize();
   const { dark, toggle: toggleDark } = useDarkMode();
 
-  const baseTheme: Theme = THEMES[activeCategory];
+  const effectiveCategory: ThemeKey = activeTab === 'discover' ? activeCategory : 'heritage';
+  const baseTheme: Theme = THEMES[effectiveCategory];
   const theme: Theme = dark ? applyDark(baseTheme) : baseTheme;
 
+  const { profile } = useProfile(user?.id);
   const userEmail = user?.email ?? user?.user_metadata?.email ?? 'kasama@sabayph.com';
-  const userFullName: string = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
-  const userName = userFullName || userEmail.split('@')[0];
+  const googleName: string = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
+  const userName = profile?.display_name || googleName || userEmail.split('@')[0];
+  const avatarUrl: string = user?.user_metadata?.avatar_url ?? '';
 
   useEffect(() => {
     document.documentElement.style.transition = 'background-color 600ms ease';
@@ -97,18 +101,21 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
   const renderTab = () => {
     switch (activeTab) {
       case 'rooms':   return <RoomsTab theme={theme} userId={user?.id} />;
-      case 'explore': return <ExploreTab theme={theme} />;
+      case 'explore': return <ExploreTab theme={theme} userId={user?.id} />;
+      case 'friends': return <FriendsTab theme={theme} userId={user?.id} />;
       case 'profile': return (
         <ProfileTab
           theme={theme}
           user={{ email: userEmail, name: userName }}
+          supabaseUser={user ?? undefined}
+          avatarUrl={avatarUrl}
           userId={user?.id}
           dark={dark}
           onToggleDark={toggleDark}
           onLogout={onLogout}
         />
       );
-      default: return <DiscoverTab theme={theme} activeCategory={activeCategory} onCategoryChange={onCategoryChange} />;
+      default: return <DiscoverTab theme={theme} activeCategory={activeCategory} onCategoryChange={onCategoryChange} userId={user?.id} />;
     }
   };
 
@@ -127,11 +134,12 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <DarkToggle />
             <div
-              style={{ width: 34, height: 34, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: `2px solid ${theme.border}` }}
+              style={{ width: 34, height: 34, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: `2px solid ${theme.border}`, overflow: 'hidden', position: 'relative', flexShrink: 0 }}
               onClick={() => setActiveTab('profile')}
               title={userName}
             >
-              {userName.charAt(0).toUpperCase()}
+              <span style={{ position: 'absolute' }}>{userName.charAt(0).toUpperCase()}</span>
+              {avatarUrl && <img src={avatarUrl} alt={userName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
             </div>
           </div>
         </div>
@@ -171,10 +179,11 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
               <p style={{ fontSize: 12, color: theme.textMuted, margin: 0 }}>{userEmail}</p>
             </div>
             <div
-              style={{ width: 40, height: 40, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 17, border: `2px solid ${theme.border}`, cursor: 'pointer', flexShrink: 0 }}
+              style={{ width: 40, height: 40, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 17, border: `2px solid ${theme.border}`, cursor: 'pointer', flexShrink: 0, overflow: 'hidden', position: 'relative' }}
               onClick={() => setActiveTab('profile')}
             >
-              {userName.charAt(0).toUpperCase()}
+              <span style={{ position: 'absolute' }}>{userName.charAt(0).toUpperCase()}</span>
+              {avatarUrl && <img src={avatarUrl} alt={userName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
             </div>
           </div>
         </div>

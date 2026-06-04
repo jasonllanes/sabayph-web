@@ -46,7 +46,10 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
     setJoining(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user && room.member_count < room.max_members) {
-      await supabase.from('rooms').update({ member_count: room.member_count + 1 }).eq('id', room.id);
+      await Promise.all([
+        supabase.from('rooms').update({ member_count: room.member_count + 1 }).eq('id', room.id),
+        supabase.from('room_members').upsert({ room_id: room.id, user_id: user.id }, { onConflict: 'room_id,user_id' }),
+      ]);
     }
     setJoining(false);
     setJoined(true);
@@ -113,7 +116,14 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
             <>
               <div style={{ background: T.surfaceAlt, borderRadius: 16, padding: 16, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, background: '#F4ECDF', color: '#9F5E0F', padding: '3px 10px', borderRadius: 20, border: '1px solid #9F5E0F44' }}>Rotary</span>
+                  {room.category === 'gaming'
+                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#EDE9FE', color: '#7C3AED', padding: '3px 10px', borderRadius: 20, border: '1px solid #C4B5FD' }}><img src="/gaming.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Gaming</span>
+                    : room.category === 'pasabuy'
+                      ? <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3E2', color: '#D97706', padding: '3px 10px', borderRadius: 20, border: '1px solid #F9C07E' }}>PasaBuy</span>
+                      : room.category === 'cafe'
+                        ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#92400E', padding: '3px 10px', borderRadius: 20, border: '1px solid #D97706AA' }}><img src="/coffee.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Cafe</span>
+                        : <span style={{ fontSize: 11, fontWeight: 700, background: '#F4ECDF', color: '#9F5E0F', padding: '3px 10px', borderRadius: 20, border: '1px solid #9F5E0F44' }}>Rotary</span>
+                  }
                   {room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
                   {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: T.border, color: T.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} /> PRIVATE</span>}
                 </div>
@@ -125,7 +135,7 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
                 </p>
 
                 <div style={{ marginBottom: eventDisplay ? 10 : 0 }}>
-                  <span style={{ fontSize: 11, color: T.textMuted }}><Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{room.member_count} / {room.max_members} members</span>
+                  <span style={{ fontSize: 11, color: T.textMuted }}><Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{room.member_count} / {room.max_members} {room.category === 'gaming' ? 'players' : room.category === 'cafe' ? 'guests' : 'members'}</span>
                   <div style={{ height: 5, background: T.border, borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
                     <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: T.primary, transition: 'width 600ms ease' }} />
                   </div>

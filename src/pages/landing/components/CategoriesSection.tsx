@@ -38,16 +38,16 @@ export function CategoriesSection({
               Pick your vibe
             </p>
             <h2 className="font-display mt-2 text-4xl font-bold leading-tight sm:text-5xl" style={{ color: theme.text }}>
-              Seven ways to find<br />your people.
+              Eight ways to find<br />your people.
             </h2>
           </div>
           <p className="max-w-md text-base" style={{ color: theme.textMuted }}>
             Tap any category to preview the experience. Tap again to close.
-            Rotary is live — the rest are launching soon.
+            Rotary and PasaBuy are live — the rest are launching soon.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-9" style={{ gridAutoRows: '1fr' }}>
           {/* Default / Heritage reset card */}
           <button
             onClick={() => setActiveCategory('heritage')}
@@ -56,7 +56,7 @@ export function CategoriesSection({
               background: activeCategory === 'heritage' ? theme.text : theme.surface,
               color: activeCategory === 'heritage' ? theme.bg : theme.text,
               border: `2px solid ${theme.text}`,
-              minHeight: '168px',
+              height: '152px',
             }}
           >
             <Sparkles size={28} strokeWidth={1.5} />
@@ -75,7 +75,7 @@ export function CategoriesSection({
                   background: isActive ? theme.primary : theme.surface,
                   color: isActive ? theme.bg : theme.text,
                   border: `2px solid ${isActive ? theme.primary : theme.border}`,
-                  minHeight: '168px',
+                  height: '152px',
                   boxShadow: isActive ? `0 4px 20px ${theme.primary}40` : 'none',
                 }}
               >

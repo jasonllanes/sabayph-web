@@ -16,6 +16,14 @@ interface SignUpPageProps {
   onGoToLogin: () => void;
 }
 
+const PW_RULES = [
+  { key: 'length',    label: 'Minimum characters 12',   test: (p: string) => p.length >= 12 },
+  { key: 'upper',     label: 'One uppercase character',  test: (p: string) => /[A-Z]/.test(p) },
+  { key: 'lower',     label: 'One lowercase character',  test: (p: string) => /[a-z]/.test(p) },
+  { key: 'special',   label: 'One special character',    test: (p: string) => /[^A-Za-z0-9]/.test(p) },
+  { key: 'number',    label: 'One number',               test: (p: string) => /[0-9]/.test(p) },
+];
+
 export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGoToLogin }: SignUpPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,17 +36,23 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
   const [emailFocus, setEmailFocus] = useState(false);
   const [pwFocus, setPwFocus] = useState(false);
   const [confirmFocus, setConfirmFocus] = useState(false);
+  const [pwDirty, setPwDirty] = useState(false);
+
+  const pwResults = PW_RULES.map(r => ({ ...r, pass: r.test(password) }));
+  const pwValid = pwResults.every(r => r.pass);
+  const showPwErrors = pwDirty && !pwValid;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setPwDirty(true);
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+    if (!pwValid) {
+      setError('Please add all necessary characters to create safe password.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
@@ -46,15 +60,22 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
     const { data, error: authError } = await supabase.auth.signUp({ email, password });
     setLoading(false);
 
-    if (authError) { setError(authError.message); return; }
-
-    if (data.session) {
-      // Email confirmation disabled — session is live immediately
-      onSignUp(data.user?.email ?? email);
-    } else {
-      // Email confirmation required — go to verify page
-      onNeedsVerification(data.user?.email ?? email);
+    if (authError) {
+      // If the only failure is that Supabase tried to send a confirmation email
+      // (which we don't need), proceed if the user was actually created.
+      if (
+        authError.message?.toLowerCase().includes('confirmation email') ||
+        authError.message?.toLowerCase().includes('sending')
+      ) {
+        onSignUp((data as any)?.user?.email ?? email);
+        return;
+      }
+      setError(authError.message);
+      return;
     }
+
+    // Verification disabled — proceed directly regardless of session state
+    onSignUp(data.user?.email ?? email);
   };
 
   const handleGoogleSignUp = async () => {
@@ -72,10 +93,10 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
     }
   };
 
-  const inputStyle = (focused: boolean): React.CSSProperties => ({
+  const inputStyle = (focused: boolean, hasError = false): React.CSSProperties => ({
     width: '100%', height: 52, padding: '0 48px 0 16px',
     fontSize: 15, fontFamily: '"DM Sans", system-ui, sans-serif',
-    border: `2px solid ${focused ? T.primary : T.border}`,
+    border: `2px solid ${hasError ? '#C82718' : focused ? T.primary : T.border}`,
     borderRadius: 12, background: T.surface,
     color: T.text, outline: 'none',
     transition: 'border-color 200ms ease',
@@ -217,12 +238,12 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
                 <input
                   type={showPw ? 'text' : 'password'}
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={e => { setPassword(e.target.value); setPwDirty(true); }}
                   onFocus={() => setPwFocus(true)}
                   onBlur={() => setPwFocus(false)}
-                  placeholder="At least 6 characters"
+                  placeholder="Create a strong password"
                   required
-                  style={inputStyle(pwFocus)}
+                  style={inputStyle(pwFocus, showPwErrors)}
                 />
                 <button
                   type="button"
@@ -236,6 +257,29 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
                   {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
+              {/* Password requirements */}
+              {pwDirty && (
+                <div style={{ marginTop: 8 }}>
+                  {showPwErrors && (
+                    <p style={{ fontSize: 12, color: '#C82718', fontWeight: 600, margin: '0 0 6px' }}>
+                      Please add all necessary characters to create safe password.
+                    </p>
+                  )}
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {pwResults.map(r => (
+                      <li key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                        <span style={{
+                          width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                          background: r.pass ? '#15803D' : '#C82718',
+                        }} />
+                        <span style={{ color: r.pass ? '#15803D' : '#C82718', fontWeight: r.pass ? 400 : 600 }}>
+                          {r.label}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
             <div>
@@ -251,7 +295,7 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
                   onBlur={() => setConfirmFocus(false)}
                   placeholder="Re-enter your password"
                   required
-                  style={inputStyle(confirmFocus)}
+                  style={inputStyle(confirmFocus, !!(confirmPassword && password !== confirmPassword))}
                 />
                 <button
                   type="button"

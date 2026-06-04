@@ -1,10 +1,11 @@
 import type { LucideIcon } from 'lucide-react';
 
-export type AppView = 'landing' | 'login' | 'signup' | 'verify' | 'splash' | 'onboarding' | 'app';
+export type AppView = 'landing' | 'login' | 'signup' | 'verify' | 'profile-setup' | 'splash' | 'onboarding' | 'app';
 
 export type ThemeKey =
   | 'heritage'
   | 'rotary'
+  | 'pasabuy'
   | 'travel'
   | 'hiking'
   | 'gaming'
@@ -108,10 +109,51 @@ export interface Room {
   other_socials: OtherSocial[];
 }
 
+export type ConnectionStatus = 'none' | 'pending_sent' | 'pending_received' | 'accepted';
+
+export interface Connection {
+  id: string;
+  from_user_id: string;
+  to_user_id: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+}
+
+export interface DiscoverProfile {
+  id: string;
+  display_name: string | null;
+  age_range: string | null;
+  location: string | null;
+  bio: string | null;
+  gender: string | null;
+  profile_tags: string[] | null;
+  kasama_rating: number | null;
+  rating_count: number;
+  is_online: boolean;
+  profile_completed: boolean;
+  contact_phone: string | null;
+  home_lat: number | null;
+}
+
 export interface Profile {
   id: string;
+  display_name: string | null;
+  age_range: string | null;
+  location: string | null;
+  bio: string | null;
+  gender: string | null;
+  profile_completed: boolean;
+  privacy_level: string;
+  show_in_discover: boolean;
+  home_lat: number | null;
+  home_lng: number | null;
+  kasama_rating: number | null;
+  rating_count: number;
   facebook_url: string | null;
   instagram_url: string | null;
   twitter_url: string | null;
+  contact_phone: string | null;
+  profile_tags: string[] | null;
+  is_online: boolean;
   updated_at: string;
 }

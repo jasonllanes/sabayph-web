@@ -5,12 +5,13 @@ import SabayPHLanding from '@/pages/landing';
 import LoginPage from '@/components/LoginPage';
 import SignUpPage from '@/components/SignUpPage';
 import VerifyPage from '@/components/VerifyPage';
+import ProfileSetupPage from '@/components/ProfileSetupPage';
 import SplashScreen from '@/components/SplashScreen';
 import OnboardingScreen from '@/components/OnboardingScreen';
 import AppShell from '@/components/app/AppShell';
 import JoinRoomModal from '@/components/JoinRoomModal';
 
-type InternalView = 'landing' | 'login' | 'signup' | 'verify' | 'splash' | 'onboarding' | 'app';
+type InternalView = 'landing' | 'login' | 'signup' | 'verify' | 'profile-setup' | 'splash' | 'onboarding' | 'app';
 
 const STORAGE_KEYS = ['sabayph_auth', 'sabayph_onboarding_seen'];
 
@@ -46,7 +47,20 @@ export default function AppRouter() {
     if (authEvent === 'SIGNED_IN' && !wasLoggedIn.current) {
       wasLoggedIn.current = true;
       localStorage.removeItem('sabayph_auth');
-      setView('splash');
+
+      const userId = session?.user?.id;
+      if (userId) {
+        (async () => {
+          const { data } = await supabase
+            .from('profiles')
+            .select('profile_completed')
+            .eq('id', userId)
+            .single();
+          setView(!data?.profile_completed ? 'profile-setup' : 'splash');
+        })();
+      } else {
+        setView('splash');
+      }
     } else if (authEvent === 'SIGNED_OUT') {
       wasLoggedIn.current = false;
       clearAppStorage();
@@ -80,6 +94,10 @@ export default function AppRouter() {
 
   const user = session?.user ?? null;
 
+  if (view === 'profile-setup' && user) {
+    const googleName = user.user_metadata?.full_name ?? user.user_metadata?.name ?? '';
+    return <ProfileSetupPage userId={user.id} initialName={googleName} onDone={() => setView('splash')} />;
+  }
   if (view === 'splash')     return <SplashScreen onDone={handleSplashDone} />;
   if (view === 'onboarding') return <OnboardingScreen onDone={handleOnboardingDone} />;
 

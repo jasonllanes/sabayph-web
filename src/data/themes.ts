@@ -1,7 +1,8 @@
 import {
   Mountain, Plane, Gamepad2, Car, Coffee, HeartHandshake, Users,
   Shield, MapPin, Sparkles, CalendarCheck, Star, Globe, Compass,
-  Zap, Trophy, Route, Wallet, BookOpen, HandHeart,
+  Zap, Trophy, Route, Wallet, BookOpen, HandHeart, ShoppingBasket,
+  Package, Calculator, Handshake,
 } from 'lucide-react';
 import type { Category, CategoryDetail, CategoryId, Feature, Theme, ThemeKey, TrustItem } from '@/types';
 
@@ -110,19 +111,46 @@ export const THEMES: Record<ThemeKey, Theme> = {
     border: '#A8C19A',
     badge: 'bg-[#2E5748] text-[#E8EFE3]',
   },
+  pasabuy: {
+    name: 'PasaBuy',
+    bg: '#FEF3E2',
+    surface: '#FFFFFF',
+    surfaceAlt: '#FDE8C8',
+    primary: '#D97706',
+    accent: '#C82718',
+    highlight: '#F59E0B',
+    text: '#3F2414',
+    textMuted: '#7C5A3A',
+    border: '#F9C07E',
+    badge: 'bg-[#D97706] text-[#FEF3E2]',
+  },
 };
 
 export const CATEGORIES: Category[] = [
-  { id: 'rotary',    name: 'Rotary',     tagline: 'Service above self',    Icon: HeartHandshake, status: 'live', image: '/rotary.png' },
-  { id: 'travel',    name: 'Travel',     tagline: 'Find your kasama',      Icon: Plane,          status: 'soon', image: null },
+  { id: 'rotary',    name: 'Rotary',     tagline: 'Service above self',    Icon: HeartHandshake,  status: 'live', image: '/rotary.png' },
+  { id: 'pasabuy',   name: 'PasaBuy',    tagline: 'I\'ll buy it for you',  Icon: ShoppingBasket,  status: 'live', image: '/pasabuy.png' },
+  { id: 'travel',    name: 'Travel',     tagline: 'Find your kasama',      Icon: Plane,           status: 'soon', image: null },
   { id: 'hiking',    name: 'Hiking',     tagline: 'Akyat together',        Icon: Mountain,       status: 'soon', image: null },
-  { id: 'gaming',    name: 'Gaming',     tagline: 'Squad up, laro tayo',   Icon: Gamepad2,       status: 'soon', image: null },
+  { id: 'gaming',    name: 'Gaming',     tagline: 'Squad up, laro tayo',   Icon: Gamepad2,       status: 'live', image: '/gaming.png' },
   { id: 'rideshare', name: 'Ride-share', tagline: 'Split the sakay',       Icon: Car,            status: 'soon', image: null },
-  { id: 'cafe',      name: 'Café',       tagline: 'Kape catch-ups',        Icon: Coffee,         status: 'soon', image: null },
+  { id: 'cafe',      name: 'Café',       tagline: 'Kape catch-ups',        Icon: Coffee,         status: 'live', image: '/coffee.png' },
   { id: 'volunteer', name: 'Volunteer',  tagline: 'Tulong, sabay-sabay',   Icon: Users,          status: 'soon', image: null },
 ];
 
 export const CATEGORY_DETAILS: Record<CategoryId, CategoryDetail> = {
+  pasabuy: {
+    description: 'Request someone to buy items for you — like Grab or FoodPanda but for anything. Post what you need, set your service fee, and connect with a trusted kasama who\'ll do the shopping. Negotiate or set a fixed rate.',
+    highlights: [
+      { Icon: ShoppingBasket, label: 'Post any item — groceries, gadgets, pasalubong' },
+      { Icon: MapPin,         label: 'Pin your meetup spot for handoff' },
+      { Icon: Calculator,     label: 'Negotiation, fixed fee, or auto-estimated rate' },
+    ],
+    stats: [
+      { value: 'Live',  label: 'Now accepting' },
+      { value: '₱50+',  label: 'Avg service fee' },
+      { value: 'Fast',  label: 'Same-day pickup' },
+    ],
+  },
   rotary: {
     description: 'Coordinate Rotary Club service projects, fundraisers, and chapter meetings — all in one trusted space. Track attendance, manage RSVPs, and keep your chapter active and engaged.',
     highlights: [
@@ -172,7 +200,7 @@ export const CATEGORY_DETAILS: Record<CategoryId, CategoryDetail> = {
     stats: [
       { value: '10+',  label: 'Game titles' },
       { value: '5v5',  label: 'Max team size' },
-      { value: 'Soon', label: 'Go live' },
+      { value: 'Live', label: 'Now open' },
     ],
   },
   rideshare: {
@@ -198,7 +226,7 @@ export const CATEGORY_DETAILS: Record<CategoryId, CategoryDetail> = {
     stats: [
       { value: '20+',  label: 'Partner cafés' },
       { value: '↓15%', label: 'Member discount' },
-      { value: 'Soon', label: 'Go live' },
+      { value: 'Live', label: 'Now open' },
     ],
   },
   volunteer: {
