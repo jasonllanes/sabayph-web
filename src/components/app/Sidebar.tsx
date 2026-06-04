@@ -64,8 +64,22 @@ export default function Sidebar({ activeTab, onTabChange, theme, user, onLogout,
 
       <div style={{ padding: '16px 12px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 15, flexShrink: 0 }}>
-            {user.name.charAt(0).toUpperCase()}
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: theme.primary, flexShrink: 0, overflow: 'hidden', border: `2px solid ${theme.border}`, position: 'relative' }}>
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.name}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
+                onError={e => {
+                  const isFemale = user.gender === 'Babae';
+                  (e.currentTarget as HTMLImageElement).src = isFemale ? '/avatar_girl.png' : '/avatar.png';
+                }}
+              />
+            ) : (
+              <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 15, color: theme.bg }}>
+                {user.name.charAt(0).toUpperCase()}
+              </span>
+            )}
           </div>
           <div style={{ overflow: 'hidden' }}>
             <p style={{ fontSize: 13, fontWeight: 700, color: theme.text, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</p>

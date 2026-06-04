@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
-import { Shield, Check, ArrowRight, ShieldCheck, ShieldAlert, Star, UserPlus, Loader } from 'lucide-react';
+import { Shield, Check, ArrowRight, ShieldCheck, ShieldAlert, Star, UserPlus, Loader, Users, BookOpen, LayoutGrid } from 'lucide-react';
 import { PixelHeart, PixelPlus } from '@/components/common/PixelDecorations';
 import { CATEGORIES, CATEGORY_DETAILS, FEATURES, TRUST_ITEMS } from '@/data/themes';
 import { useDiscoverPeople } from '@/hooks/useDiscoverPeople';
 import { useConnections } from '@/hooks/useConnections';
+import { useHeroStats } from '@/hooks/useHeroStats';
 import ProfileViewModal from '@/components/app/ProfileViewModal';
-import BrowseRoomsScreen from '@/components/app/BrowseRoomsScreen';
 import { tagStyle, getDefaultAvatar } from '@/components/app/tagConstants';
 import type { Theme, ThemeKey, DiscoverProfile, CategoryId } from '@/types';
 
@@ -14,6 +14,7 @@ interface DiscoverTabProps {
   activeCategory: ThemeKey;
   onCategoryChange: (val: ThemeKey | ((prev: ThemeKey) => ThemeKey)) => void;
   userId?: string;
+  onBrowseCategory?: (cat: CategoryId) => void;
 }
 
 // ── Compact profile badge ───────────────────────────────────────────────────
@@ -153,7 +154,7 @@ const HERO_COPY: Partial<Record<ThemeKey, { headline: string; sub: string }>> = 
   volunteer: { headline: 'TULONG TAYO SABAY!', sub: 'Join community drives and make an impact' },
 };
 
-export default function DiscoverTab({ theme, activeCategory, onCategoryChange, userId }: DiscoverTabProps) {
+export default function DiscoverTab({ theme, activeCategory, onCategoryChange, userId, onBrowseCategory }: DiscoverTabProps) {
   const heroRef = useRef<HTMLDivElement | null>(null);
   const currentCategory = CATEGORIES.find(c => c.id === activeCategory) ?? null;
   const detail = currentCategory ? CATEGORY_DETAILS[activeCategory as keyof typeof CATEGORY_DETAILS] : null;
@@ -164,10 +165,10 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
   const soonCategories = CATEGORIES.filter(c => c.status === 'soon');
 
   const { people, loading: peopleLoading } = useDiscoverPeople(userId);
+  const { stats } = useHeroStats();
   const { getStatus, getConnection, sendRequest, acceptRequest, removeConnection, loading: connLoading, error: connError, tableReady } = useConnections(userId);
 
   const [viewingProfile, setViewingProfile] = useState<DiscoverProfile | null>(null);
-  const [browseCategory, setBrowseCategory] = useState<CategoryId | null>(null);
 
   const selectCategory = (id: ThemeKey) => {
     if (activeCategory === id) {
@@ -177,17 +178,6 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
       setTimeout(() => heroRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
     }
   };
-
-  if (browseCategory) {
-    return (
-      <BrowseRoomsScreen
-        categoryId={browseCategory}
-        theme={theme}
-        userId={userId}
-        onBack={() => setBrowseCategory(null)}
-      />
-    );
-  }
 
   return (
     <div style={{ padding: '0 0 24px' }}>
@@ -246,7 +236,7 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
 
               {/* CTA */}
               {currentCategory.status === 'live' ? (
-                <button onClick={() => setBrowseCategory(activeCategory as CategoryId)} style={{ alignSelf: 'flex-start', height: 38, padding: '0 18px', borderRadius: 19, border: 'none', background: '#fff', color: theme.primary, fontFamily: '"DM Sans", system-ui, sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                <button onClick={() => onBrowseCategory?.(activeCategory as CategoryId)} style={{ alignSelf: 'flex-start', height: 38, padding: '0 18px', borderRadius: 19, border: 'none', background: '#fff', color: theme.primary, fontFamily: '"DM Sans", system-ui, sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                   Browse Rooms <ArrowRight size={14} />
                 </button>
               ) : (
@@ -255,7 +245,7 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
             </div>
           ) : (
             /* ── Default hero text ── */
-            <div style={{ position: 'relative', zIndex: 2 }}>
+            <div style={{ position: 'relative', zIndex: 2, marginBottom: 40 }}>
               <p key={activeCategory + '-h'} className="font-pixel" style={{ fontSize: 22, color: '#F1EDE1', margin: '0 0 4px', letterSpacing: 2, textShadow: '0 2px 8px rgba(0,0,0,0.7)' }}>{heroCopy.headline}</p>
               <p key={activeCategory + '-s'} style={{ fontSize: 13, color: 'rgba(241,237,225,0.88)', margin: 0, fontFamily: '"DM Sans", system-ui, sans-serif' }}>{heroCopy.sub}</p>
             </div>
@@ -268,9 +258,31 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
             key={heroImage}
             src={heroImage}
             alt="SabayPH"
+            className="ml-12"
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', transition: 'opacity 300ms ease' }}
           />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 50%, rgba(0,0,0,0.25) 100%)' }} />
+          <div className="ml-12" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 50%, rgba(0,0,0,0.25) 100%)' }} />
+        </div>
+
+        {/* ── Realtime stats bar ── */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', zIndex: 4 }}>
+          {[
+            { Icon: Users, value: stats.activeMembers, label: 'Kasama Members' },
+            { Icon: BookOpen, value: stats.activeRooms, label: 'Active Rooms' },
+            { Icon: LayoutGrid, value: 4, label: 'Categories' },
+          ].map(({ Icon, value, label }, i) => (
+            <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)', borderTop: '1px solid rgba(255,255,255,0.12)', borderRight: i < 2 ? '1px solid rgba(255,255,255,0.12)' : 'none' }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={14} style={{ color: '#F1EDE1' }} strokeWidth={1.8} />
+              </div>
+              <div>
+                <p className="font-display" style={{ fontSize: 16, fontWeight: 800, color: '#F1EDE1', margin: 0, lineHeight: 1 }}>{value.toLocaleString()}</p>
+                <p style={{ fontSize: 10, color: 'rgba(241,237,225,0.65)', margin: '2px 0 0', fontFamily: '"DM Sans",system-ui,sans-serif', whiteSpace: 'nowrap' }}>{label}</p>
+              </div>
+              {/* live pulse dot */}
+              <span style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: '#4ADE80', boxShadow: '0 0 6px #4ADE80', flexShrink: 0 }} />
+            </div>
+          ))}
         </div>
       </div>
 

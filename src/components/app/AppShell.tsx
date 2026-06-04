@@ -59,6 +59,7 @@ interface AppShellProps {
 export default function AppShell({ user, onLogout }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<TabId>('discover');
   const [activeCategory, setActiveCategory] = useState<ThemeKey>('heritage');
+  const [exploreCategory, setExploreCategory] = useState<import('@/types').CategoryId | null>(null);
   const { isMobile } = useScreenSize();
   const { dark, toggle: toggleDark } = useDarkMode();
 
@@ -71,6 +72,11 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
   const googleName: string = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
   const userName = profile?.display_name || googleName || userEmail.split('@')[0];
   const avatarUrl: string = user?.user_metadata?.avatar_url ?? '';
+
+  // Resolve display avatar: Google pic → gender-based local avatar
+  const isFemale = profile?.gender === 'Babae' || (profile?.profile_tags ?? []).some(t => t === 'She/Her' || t === 'She/They');
+  const localAvatar = isFemale ? '/avatar_girl.png' : '/avatar.png';
+  const displayAvatar = avatarUrl || localAvatar;
 
   useEffect(() => {
     document.documentElement.style.transition = 'background-color 600ms ease';
@@ -101,7 +107,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
   const renderTab = () => {
     switch (activeTab) {
       case 'rooms':   return <RoomsTab theme={theme} userId={user?.id} />;
-      case 'explore': return <ExploreTab theme={theme} userId={user?.id} />;
+      case 'explore': return <ExploreTab theme={theme} userId={user?.id} initialCategory={exploreCategory} />;
       case 'friends': return <FriendsTab theme={theme} userId={user?.id} />;
       case 'profile': return (
         <ProfileTab
@@ -115,7 +121,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
           onLogout={onLogout}
         />
       );
-      default: return <DiscoverTab theme={theme} activeCategory={activeCategory} onCategoryChange={onCategoryChange} userId={user?.id} />;
+      default: return <DiscoverTab theme={theme} activeCategory={activeCategory} onCategoryChange={onCategoryChange} userId={user?.id} onBrowseCategory={cat => { setExploreCategory(cat); setActiveTab('explore'); }} />;
     }
   };
 
@@ -138,8 +144,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
               onClick={() => setActiveTab('profile')}
               title={userName}
             >
-              <span style={{ position: 'absolute' }}>{userName.charAt(0).toUpperCase()}</span>
-              {avatarUrl && <img src={avatarUrl} alt={userName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
+              <img src={displayAvatar} alt={userName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).src = localAvatar; }} />
             </div>
           </div>
         </div>
@@ -157,7 +162,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: theme.bg, color: theme.text, fontFamily: '"DM Sans", system-ui, sans-serif', transition: 'background 600ms ease, color 600ms ease' }}>
       <style>{GLOBAL_STYLE}</style>
 
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} theme={theme} user={{ email: userEmail, name: userName }} onLogout={onLogout} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} theme={theme} user={{ email: userEmail, name: userName, avatarUrl: displayAvatar, gender: profile?.gender }} onLogout={onLogout} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', background: theme.surface, borderBottom: `1.5px solid ${theme.border}`, transition: 'all 600ms ease' }}>
@@ -182,8 +187,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
               style={{ width: 40, height: 40, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 17, border: `2px solid ${theme.border}`, cursor: 'pointer', flexShrink: 0, overflow: 'hidden', position: 'relative' }}
               onClick={() => setActiveTab('profile')}
             >
-              <span style={{ position: 'absolute' }}>{userName.charAt(0).toUpperCase()}</span>
-              {avatarUrl && <img src={avatarUrl} alt={userName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
+              <img src={displayAvatar} alt={userName} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).src = localAvatar; }} />
             </div>
           </div>
         </div>

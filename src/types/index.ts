@@ -68,6 +68,8 @@ export interface TrustItem {
 export interface UserInfo {
   email: string;
   name: string;
+  avatarUrl?: string;
+  gender?: string | null;
 }
 
 export interface ItineraryItem {
