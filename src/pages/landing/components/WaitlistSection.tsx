@@ -1,78 +1,43 @@
-import { useState } from 'react';
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { PixelHeart } from '@/components/common/PixelDecorations';
 import type { Theme } from '@/types';
 
 interface WaitlistSectionProps {
   theme: Theme;
+  onLoginClick?: () => void;
 }
 
-export function WaitlistSection({ theme }: WaitlistSectionProps) {
-  const [email, setEmail] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (email) setSubmitted(true);
-  };
-
+export function WaitlistSection({ theme, onLoginClick }: WaitlistSectionProps) {
   return (
-    <section id="waitlist" className="px-6 py-20 lg:px-12">
-      <div className="mx-auto max-w-3xl text-center">
-        <p className="font-pixel text-base uppercase tracking-wide" style={{ color: theme.accent }}>
-          Be the first kasama
+    <section id="join" className="px-6 py-20 lg:px-12">
+      <div
+        className="mx-auto max-w-3xl rounded-3xl text-center px-8 py-16"
+        style={{ background: theme.text, border: `3px solid ${theme.text}`, boxShadow: `8px 8px 0 ${theme.primary}` }}
+      >
+        <div className="flex justify-center gap-3 mb-6">
+          <PixelHeart color={theme.highlight} size={18} />
+          <PixelHeart color={theme.accent} size={18} />
+          <PixelHeart color={theme.highlight} size={18} />
+        </div>
+        <p className="font-pixel text-base uppercase tracking-widest mb-2" style={{ color: theme.highlight }}>
+          Tara na, kasama!
         </p>
-        <h2 className="font-display mt-2 text-4xl font-bold leading-tight sm:text-5xl" style={{ color: theme.text }}>
-          Join the SabayPH waitlist.
+        <h2 className="font-display mt-2 text-4xl font-bold leading-tight sm:text-5xl mb-4" style={{ color: theme.bg }}>
+          Ready to find your people?
         </h2>
-        <p className="mt-4 text-lg" style={{ color: theme.textMuted }}>
-          Get early access, exclusive launch perks, and a verified badge from day one.
+        <p className="text-lg mb-10 max-w-xl mx-auto" style={{ color: theme.bg, opacity: 0.75 }}>
+          SabayPH is live. Sign in or create your account and join the kasama community today.
         </p>
-
-        {!submitted ? (
-          <form onSubmit={handleSubmit} className="mx-auto mt-8 flex max-w-md flex-col gap-3 sm:flex-row">
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              required
-              className="h-12 rounded-full border-2 px-5 text-base"
-              style={{ background: theme.surface, borderColor: theme.border, color: theme.text }}
-            />
-            <Button
-              type="submit"
-              className="h-12 rounded-full px-7 text-base font-medium"
-              style={{ background: theme.primary, color: theme.bg, border: 'none' }}
-            >
-              Join waitlist
-              <ArrowRight className="ml-1 h-4 w-4" />
-            </Button>
-          </form>
-        ) : (
-          <div
-            className="mx-auto mt-8 max-w-md rounded-2xl p-6"
-            style={{ background: theme.surface, border: `2px solid ${theme.primary}` }}
-          >
-            <div
-              className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full"
-              style={{ background: theme.primary }}
-            >
-              <Check size={20} strokeWidth={3} style={{ color: theme.bg }} />
-            </div>
-            <p className="font-display text-xl font-bold" style={{ color: theme.text }}>
-              Salamat, kasama!
-            </p>
-            <p className="mt-1 text-sm" style={{ color: theme.textMuted }}>
-              You&apos;re on the list. We&apos;ll be in touch.
-            </p>
-          </div>
-        )}
-
-        <p className="mt-6 text-xs" style={{ color: theme.textMuted }}>
-          No spam. Unsubscribe anytime. We respect your inbox.
-        </p>
+        <Button
+          size="lg"
+          className="rounded-full px-10 py-6 text-base font-bold"
+          style={{ background: theme.bg, color: theme.text, border: 'none' }}
+          onClick={onLoginClick}
+        >
+          Get started — it's free
+          <ArrowRight className="ml-2 h-4 w-4" />
+        </Button>
       </div>
     </section>
   );

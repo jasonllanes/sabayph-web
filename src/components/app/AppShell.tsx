@@ -13,6 +13,8 @@ import RoomsTab from './RoomsTab';
 import ExploreTab from './ExploreTab';
 import ProfileTab from './ProfileTab';
 import FriendsTab from './FriendsTab';
+import MessagesTab from './MessagesTab';
+import { useUnreadCount } from '@/hooks/useMessages';
 
 // Splash screen dark palette applied on top of any theme
 const DARK: Partial<Theme> = {
@@ -48,6 +50,7 @@ const TAB_LABELS: Record<TabId, string> = {
   rooms:    'My Rooms',
   explore:  'Explore',
   friends:  'Friends',
+  messages: 'Messages',
   profile:  'Profile',
 };
 
@@ -68,6 +71,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
   const theme: Theme = dark ? applyDark(baseTheme) : baseTheme;
 
   const { profile } = useProfile(user?.id);
+  const unreadMessages = useUnreadCount(user?.id);
   const userEmail = user?.email ?? user?.user_metadata?.email ?? 'kasama@sabayph.com';
   const googleName: string = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
   const userName = profile?.display_name || googleName || userEmail.split('@')[0];
@@ -108,7 +112,8 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
     switch (activeTab) {
       case 'rooms':   return <RoomsTab theme={theme} userId={user?.id} />;
       case 'explore': return <ExploreTab theme={theme} userId={user?.id} initialCategory={exploreCategory} />;
-      case 'friends': return <FriendsTab theme={theme} userId={user?.id} />;
+      case 'friends':  return <FriendsTab theme={theme} userId={user?.id} />;
+      case 'messages': return <MessagesTab theme={theme} userId={user?.id} />;
       case 'profile': return (
         <ProfileTab
           theme={theme}
@@ -153,7 +158,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
           {renderTab()}
         </div>
 
-        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} theme={theme} />
+        <BottomNav activeTab={activeTab} onTabChange={setActiveTab} theme={theme} unreadMessages={unreadMessages} />
       </div>
     );
   }
@@ -162,7 +167,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: theme.bg, color: theme.text, fontFamily: '"DM Sans", system-ui, sans-serif', transition: 'background 600ms ease, color 600ms ease' }}>
       <style>{GLOBAL_STYLE}</style>
 
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} theme={theme} user={{ email: userEmail, name: userName, avatarUrl: displayAvatar, gender: profile?.gender }} onLogout={onLogout} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} theme={theme} user={{ email: userEmail, name: userName, avatarUrl: displayAvatar, gender: profile?.gender }} onLogout={onLogout} unreadMessages={unreadMessages} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', background: theme.surface, borderBottom: `1.5px solid ${theme.border}`, transition: 'all 600ms ease' }}>
@@ -173,7 +178,8 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
             <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: theme.text, margin: 0 }}>
               {activeTab === 'discover' ? `Kamusta, ${userName}! 👋`
                 : activeTab === 'rooms' ? 'Your Rooms'
-                : activeTab === 'explore' ? 'Explore Activities'
+                : activeTab === 'explore'  ? 'Explore Activities'
+                : activeTab === 'messages' ? 'Messages'
                 : 'Your Profile'}
             </h1>
           </div>

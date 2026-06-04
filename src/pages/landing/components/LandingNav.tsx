@@ -35,7 +35,7 @@ export function LandingNav({ theme, onLoginClick, scrollTo }: LandingNavProps) {
         </div>
 
         <div className="hidden items-center gap-8 md:flex">
-          {['categories', 'features', 'trust', 'waitlist'].map((id) => (
+          {['categories', 'features', 'trust', 'join'].map((id) => (
             <a
               key={id}
               href={`#${id}`}
@@ -60,9 +60,9 @@ export function LandingNav({ theme, onLoginClick, scrollTo }: LandingNavProps) {
           <Button
             className="hidden rounded-full font-medium md:inline-flex"
             style={{ background: theme.primary, color: theme.bg, border: 'none' }}
-            onClick={() => handleScrollTo('waitlist')}
+            onClick={onLoginClick}
           >
-            Join early
+            Get started
             <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
           <button
@@ -83,7 +83,7 @@ export function LandingNav({ theme, onLoginClick, scrollTo }: LandingNavProps) {
           className="md:hidden px-6 pb-4 flex flex-col gap-4"
           style={{ borderTop: `1px solid ${theme.border}`, background: `${theme.bg}F5` }}
         >
-          {['categories', 'features', 'trust', 'waitlist'].map((id) => (
+          {['categories', 'features', 'trust', 'join'].map((id) => (
             <button
               key={id}
               onClick={() => handleScrollTo(id)}
@@ -97,9 +97,9 @@ export function LandingNav({ theme, onLoginClick, scrollTo }: LandingNavProps) {
             <Button
               className="rounded-full font-medium w-fit"
               style={{ background: theme.primary, color: theme.bg, border: 'none' }}
-              onClick={() => handleScrollTo('waitlist')}
+              onClick={() => { setMobileMenuOpen(false); onLoginClick?.(); }}
             >
-              Join early <ArrowRight className="ml-1 h-4 w-4" />
+              Get started <ArrowRight className="ml-1 h-4 w-4" />
             </Button>
             {onLoginClick && (
               <Button

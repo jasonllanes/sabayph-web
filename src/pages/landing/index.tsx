@@ -71,7 +71,7 @@ export default function SabayPHLanding({ onLoginClick }: SabayPHLandingProps) {
       <FeaturesSection theme={theme} />
       <TrustSection theme={theme} />
       <ManifestoSection theme={theme} />
-      <WaitlistSection theme={theme} />
+      <WaitlistSection theme={theme} onLoginClick={onLoginClick} />
       <LandingFooter theme={theme} />
     </div>
   );

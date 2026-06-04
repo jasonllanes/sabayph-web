@@ -161,9 +161,9 @@ export function CategoryPanel({ theme, displayCategory, panelOpen, panelRef, scr
                         variant="outline"
                         className="rounded-full"
                         style={{ borderColor: theme.primary, color: theme.primary, background: 'transparent' }}
-                        onClick={() => scrollTo('waitlist')}
+                        onClick={() => scrollTo('join')}
                       >
-                        Notify me when it launches
+                        Get notified when it launches
                       </Button>
                     )}
                     <button

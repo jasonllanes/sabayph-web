@@ -183,19 +183,48 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
     <div style={{ padding: '0 0 24px' }}>
 
       {/* Hero */}
-      <div ref={heroRef} style={{ position: 'relative', overflow: 'hidden', background: theme.primary, display: 'flex', minHeight: currentCategory && detail && activeCategory !== 'heritage' ? 420 : 300, transition: 'min-height 300ms ease' }}>
+      <style>{`
+        .hero-wrap { display: flex; flex-direction: row; }
+        .hero-img-col { flex: 0 0 45%; position: relative; overflow: hidden; }
+        .hero-img-mobile { display: none; }
+        .hero-img-col img, .hero-img-col .hero-fade { position: absolute; inset: 0; width: 100%; height: 100%; }
+        @media (max-width: 540px) {
+          .hero-wrap { flex-direction: column; overflow: visible; }
+          .hero-img-col { display: none; }
+          .hero-img-mobile { display: block; width: 100%; position: relative; flex-shrink: 0; margin-bottom: -48px; z-index: 1; }
+          .hero-img-mobile img { width: 100%; height: auto; display: block; }
+          .hero-img-mobile .hero-fade { position: absolute; bottom: 0; left: 0; right: 0; height: 100px; background: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.55) 100%); }
+          .hero-content-col { padding: 20px 18px 72px !important; z-index: 2; }
+          .hero-gradient { background: rgba(0,0,0,0.3) !important; }
+        }
+      `}</style>
+      <div ref={heroRef} className="hero-wrap" style={{ position: 'relative', background: theme.primary, minHeight: currentCategory && detail && activeCategory !== 'heritage' ? 420 : 300, transition: 'min-height 300ms ease' }}>
 
-        {/* Left: default or detail content */}
-        <div style={{ flex: '1 1 55%', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: currentCategory && detail && activeCategory !== 'heritage' ? 'flex-start' : 'flex-end', padding: '48px 20px 24px 20px', zIndex: 2 }}>
-          {/* dark left-to-right gradient so text stays readable over the bg */}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.28) 75%, rgba(0,0,0,0) 100%)', zIndex: 0 }} />
-
-          {/* SABAY! badge */}
-          <div className="font-pixel" style={{ position: 'absolute', top: 16, left: 16, background: theme.accent, color: '#F1EDE1', padding: '4px 12px', borderRadius: 20, fontSize: 14, letterSpacing: 1, zIndex: 3 }}>SABAY!</div>
-          <div style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 8, alignItems: 'center', zIndex: 3 }}>
+        {/* Mobile-only: image on top */}
+        <div className="hero-img-mobile">
+          <img key={heroImage + '-m'} src={heroImage} alt="SabayPH" style={{ objectPosition: 'center top' }} />
+          <div className="hero-fade" />
+          {/* SABAY! badge on mobile */}
+          <div className="font-pixel" style={{ position: 'absolute', top: 12, left: 12, background: theme.accent, color: '#F1EDE1', padding: '4px 12px', borderRadius: 20, fontSize: 14, letterSpacing: 1, zIndex: 3 }}>SABAY!</div>
+          <div style={{ position: 'absolute', top: 10, right: 12, display: 'flex', gap: 8, alignItems: 'center', zIndex: 3 }}>
             <PixelHeart color="#EEA64C" size={16} />
             <PixelPlus color="#EEA64C" size={11} />
           </div>
+        </div>
+
+        {/* Left/below: text content */}
+        <div className="hero-content-col" style={{ flex: '1 1 55%', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: currentCategory && detail && activeCategory !== 'heritage' ? 'flex-start' : 'flex-end', padding: '48px 20px 72px 20px', zIndex: 2 }}>
+          {/* dark gradient (hidden on mobile via .hero-gradient override) */}
+          <div className="hero-gradient" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.28) 75%, rgba(0,0,0,0) 100%)', zIndex: 0 }} />
+
+          {/* SABAY! badge — desktop only (mobile shows it over image above) */}
+          <div className="font-pixel hero-badge-desktop" style={{ position: 'absolute', top: 16, left: 16, background: theme.accent, color: '#F1EDE1', padding: '4px 12px', borderRadius: 20, fontSize: 14, letterSpacing: 1, zIndex: 3 }}>SABAY!</div>
+          <style>{`.hero-badge-desktop{ display:block; } @media(max-width:540px){ .hero-badge-desktop{ display:none; } }`}</style>
+          <div className="hero-deco-desktop" style={{ position: 'absolute', top: 14, right: 14, display: 'flex', gap: 8, alignItems: 'center', zIndex: 3 }}>
+            <PixelHeart color="#EEA64C" size={16} />
+            <PixelPlus color="#EEA64C" size={11} />
+          </div>
+          <style>{`.hero-deco-desktop{ display:flex; } @media(max-width:540px){ .hero-deco-desktop{ display:none; } }`}</style>
 
           {currentCategory && detail && activeCategory !== 'heritage' ? (
             /* ── Category detail inside hero ── */
@@ -252,16 +281,16 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
           )}
         </div>
 
-        {/* Right: image */}
-        <div style={{ flex: '0 0 45%', position: 'relative', overflow: 'hidden' }}>
+        {/* Right: image — desktop only */}
+        <div className="hero-img-col">
           <img
             key={heroImage}
             src={heroImage}
             alt="SabayPH"
             className="ml-12"
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', transition: 'opacity 300ms ease' }}
+            style={{ objectFit: 'cover', objectPosition: 'center top', transition: 'opacity 300ms ease' }}
           />
-          <div className="ml-12" style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 50%, rgba(0,0,0,0.25) 100%)' }} />
+          <div className="ml-12 hero-fade" style={{ background: 'linear-gradient(to left, rgba(0,0,0,0) 50%, rgba(0,0,0,0.25) 100%)' }} />
         </div>
 
         {/* ── Realtime stats bar ── */}
@@ -271,7 +300,7 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
             { Icon: BookOpen, value: stats.activeRooms, label: 'Active Rooms' },
             { Icon: LayoutGrid, value: 4, label: 'Categories' },
           ].map(({ Icon, value, label }, i) => (
-            <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)', borderTop: '1px solid rgba(255,255,255,0.12)', borderRight: i < 2 ? '1px solid rgba(255,255,255,0.12)' : 'none' }}>
+            <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px 10px 10px', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)', borderTop: '1px solid rgba(255,255,255,0.12)', borderRight: i < 2 ? '1px solid rgba(255,255,255,0.12)' : 'none' }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Icon size={14} style={{ color: '#F1EDE1' }} strokeWidth={1.8} />
               </div>

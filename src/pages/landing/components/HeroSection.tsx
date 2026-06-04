@@ -34,7 +34,7 @@ export function HeroSection({ theme, scrollTo }: HeroSectionProps) {
             style={{ color: theme.textMuted }}
           >
             SabayPH is the trusted way to find your kasama for real-world adventures —
-            from Rotary service projects to mountain climbs to weekend ride-shares.
+            from Rotary service projects to PasaBuy errands, gaming squads, and café hangouts.
             No more going alone.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -42,9 +42,9 @@ export function HeroSection({ theme, scrollTo }: HeroSectionProps) {
               size="lg"
               className="rounded-full px-7 py-6 text-base font-medium"
               style={{ background: theme.primary, color: theme.bg, border: 'none' }}
-              onClick={() => scrollTo('waitlist')}
+              onClick={() => scrollTo('join')}
             >
-              Join the waitlist
+              Get started — it's free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
             <Button
