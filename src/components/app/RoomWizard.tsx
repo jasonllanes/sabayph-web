@@ -14,7 +14,7 @@ const MapPicker = lazy(() => import('@/components/common/MapPicker'));
 
 export interface WizardData {
   name: string; host_name: string; description: string;
-  max_members: number; status: 'live' | 'soon'; category: string; member_count: number;
+  max_members: number; status: 'live' | 'soon' | 'confirmed' | 'completed' | 'cancelled'; category: string; member_count: number;
   event_date: string;
   location: MapLocation | null;
   itinerary: ItineraryItem[];
@@ -22,6 +22,9 @@ export interface WizardData {
   facebook_url: string; instagram_url: string; twitter_url: string;
   other_socials: OtherSocial[];
   next_event: string; join_code: string;
+  // Gaming
+  game_name: string;
+  game_id: string;
 }
 
 interface RoomWizardProps {
@@ -47,8 +50,25 @@ function makeDefault(): WizardData {
     facebook_url: '', instagram_url: '', twitter_url: '',
     other_socials: [],
     next_event: '', join_code: '',
+    game_name: '', game_id: '',
   };
 }
+
+const GAMES: { name: string; idLabel: string; placeholder: string }[] = [
+  { name: 'Mobile Legends: Bang Bang', idLabel: 'ML Player ID',        placeholder: 'e.g. 123456789 (1234)' },
+  { name: 'Valorant',                  idLabel: 'Riot ID',              placeholder: 'e.g. PlayerName#1234' },
+  { name: 'Dota 2',                    idLabel: 'Steam Friend Code',    placeholder: 'e.g. 1234567890' },
+  { name: 'League of Legends',         idLabel: 'Summoner Name',        placeholder: 'e.g. SummonerName' },
+  { name: 'Call of Duty',              idLabel: 'Activision ID',        placeholder: 'e.g. Name#1234567' },
+  { name: 'Minecraft',                 idLabel: 'Minecraft Username',   placeholder: 'e.g. Steve123' },
+  { name: 'Roblox',                    idLabel: 'Roblox Username',      placeholder: 'e.g. RobloxPlayer' },
+  { name: 'Genshin Impact',            idLabel: 'UID',                  placeholder: 'e.g. 800000000' },
+  { name: 'Honkai: Star Rail',         idLabel: 'UID',                  placeholder: 'e.g. 800000000' },
+  { name: 'Fortnite',                  idLabel: 'Epic Games Username',  placeholder: 'e.g. FortnitePlayer' },
+  { name: 'PUBG Mobile',               idLabel: 'PUBG ID',              placeholder: 'e.g. 5123456789' },
+  { name: 'Free Fire',                 idLabel: 'Free Fire UID',        placeholder: 'e.g. 123456789' },
+  { name: 'Other',                     idLabel: 'Game Username / ID',   placeholder: 'Your in-game ID' },
+];
 
 const STEPS = ['Info', 'Schedule', 'Itinerary', 'Access', 'Socials'];
 
@@ -138,18 +158,22 @@ function Step1({ data, set, T, nameRef, hostRef }: { data: WizardData; set: <K e
   );
 }
 
-// ─── Step 2: Schedule & Location ─────────────────────────────────────────────
+// ─── Step 2: Schedule & Location / Gaming ────────────────────────────────────
 
 function Step2({ data, set, T }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme }) {
   const { inp, lbl } = makeStyles(T);
+  const isGaming = data.category === 'gaming';
 
   const mapTheme: MapPickerTheme = {
     primary: T.primary, bg: T.bg, surface: T.surface,
     surfaceAlt: T.surfaceAlt, text: T.text, textMuted: T.textMuted, border: T.border,
   };
 
+  const selectedGame = GAMES.find(g => g.name === data.game_name);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Date/time — always shown */}
       <div>
         <label style={lbl}>EVENT DATE & TIME</label>
         <div style={{ position: 'relative' }}>
@@ -163,23 +187,67 @@ function Step2({ data, set, T }: { data: WizardData; set: <K extends keyof Wizar
         </div>
       </div>
 
-      <div>
-        <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 6 }}>
-          <MapPin size={11} /> MEETUP LOCATION
-        </label>
-        <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 8px', lineHeight: 1.5 }}>
-          Search for a place or drag the map to pin your meetup location.
-        </p>
-        <Suspense fallback={<div style={{ height: 280, background: T.surfaceAlt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textMuted, fontSize: 13 }}>Loading map…</div>}>
-          <MapPicker value={data.location} onChange={loc => set('location', loc)} theme={mapTheme} />
-        </Suspense>
-        {data.location && (
-          <div style={{ marginTop: 10 }}>
-            <label style={lbl}>LOCATION NAME (editable)</label>
-            <input style={inp} value={data.location.name} onChange={e => set('location', { ...data.location!, name: e.target.value })} placeholder="e.g. Apo View Hotel, Davao City" />
+      {isGaming ? (
+        /* ── Gaming: game picker + dynamic ID field ── */
+        <>
+          <div>
+            <label style={lbl}>CHOOSE A GAME *</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+              {GAMES.map(g => (
+                <button
+                  key={g.name}
+                  type="button"
+                  onClick={() => { set('game_name', g.name); set('game_id', ''); }}
+                  style={{
+                    padding: '8px 10px', borderRadius: 10, cursor: 'pointer',
+                    border: `1.5px solid ${data.game_name === g.name ? T.primary : T.border}`,
+                    background: data.game_name === g.name ? `${T.primary}18` : T.surfaceAlt,
+                    color: data.game_name === g.name ? T.primary : T.text,
+                    fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                    textAlign: 'left', transition: 'all 150ms',
+                  }}
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+
+          {selectedGame && (
+            <div>
+              <label style={lbl}>{selectedGame.idLabel.toUpperCase()} (YOUR ID)</label>
+              <input
+                style={inp}
+                value={data.game_id}
+                onChange={e => set('game_id', e.target.value)}
+                placeholder={selectedGame.placeholder}
+              />
+              <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 0' }}>
+                This helps members find and add you in-game.
+              </p>
+            </div>
+          )}
+        </>
+      ) : (
+        /* ── Non-gaming: map location ── */
+        <div>
+          <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MapPin size={11} /> MEETUP LOCATION
+          </label>
+          <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 8px', lineHeight: 1.5 }}>
+            Search for a place or drag the map to pin your meetup location.
+          </p>
+          <Suspense fallback={<div style={{ height: 280, background: T.surfaceAlt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textMuted, fontSize: 13 }}>Loading map…</div>}>
+            <MapPicker value={data.location} onChange={loc => set('location', loc)} theme={mapTheme} />
+          </Suspense>
+          {data.location && (
+            <div style={{ marginTop: 10 }}>
+              <label style={lbl}>LOCATION NAME (editable)</label>
+              <input style={inp} value={data.location.name} onChange={e => set('location', { ...data.location!, name: e.target.value })} placeholder="e.g. Apo View Hotel, Davao City" />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -428,6 +496,7 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
       facebook_url: editing.facebook_url ?? '', instagram_url: editing.instagram_url ?? '', twitter_url: editing.twitter_url ?? '',
       other_socials: editing.other_socials ?? [],
       next_event: editing.next_event ?? '', join_code: editing.join_code,
+      game_name: editing.game_name ?? '', game_id: editing.game_id ?? '',
     };
   });
   const [saving, setSaving] = useState(false);
@@ -446,6 +515,9 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
     if (step === 0) {
       if (!data.name.trim())      { setTimeout(() => nameRef.current?.focus(), 50); return 'Room name is required.'; }
       if (!data.host_name.trim()) { setTimeout(() => hostRef.current?.focus(), 50); return 'Host name is required.'; }
+    }
+    if (step === 1 && data.category === 'gaming' && !data.game_name) {
+      return 'Please choose a game for this lobby.';
     }
     if (step === 3 && data.is_private && !data.password.trim()) {
       setTimeout(() => passwordRef.current?.focus(), 50);

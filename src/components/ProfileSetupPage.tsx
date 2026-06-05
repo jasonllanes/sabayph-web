@@ -6,6 +6,17 @@ import 'leaflet/dist/leaflet.css';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { supabase } from '@/lib/supabase';
 
+const TAG_CHARS = 'abcdefghjkmnpqrstuvwxyz23456789';
+async function generateKasamaTag(): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let tag = 'ksm-';
+    for (let i = 0; i < 6; i++) tag += TAG_CHARS[Math.floor(Math.random() * TAG_CHARS.length)];
+    const { data } = await supabase.from('profiles').select('id').eq('kasama_tag', tag).single();
+    if (!data) return tag;
+  }
+  return 'ksm-' + Date.now().toString(36).slice(-6);
+}
+
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -152,6 +163,9 @@ export default function ProfileSetupPage({ userId, initialName = '', onDone }: P
     setError('');
     setLoading(true);
 
+    const { data: existing } = await supabase.from('profiles').select('kasama_tag').eq('id', userId).single();
+    const kasamaTag = existing?.kasama_tag || await generateKasamaTag();
+
     const { error: err } = await supabase.from('profiles').upsert({
       id: userId,
       display_name: displayName.trim(),
@@ -162,6 +176,7 @@ export default function ProfileSetupPage({ userId, initialName = '', onDone }: P
       home_lat: homeCoords?.lat ?? null,
       home_lng: homeCoords?.lng ?? null,
       profile_completed: true,
+      kasama_tag: kasamaTag,
       updated_at: new Date().toISOString(),
     });
 

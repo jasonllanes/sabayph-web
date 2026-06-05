@@ -58,7 +58,7 @@ export function TrustSection({ theme }: TrustSectionProps) {
               }}
             />
             <img
-              src="/safe.png"
+              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/safe.png"
               alt="SabayPH trust & safety mascot"
               className="relative z-20 w-full object-contain"
               style={{ imageRendering: 'pixelated', display: 'block' }}

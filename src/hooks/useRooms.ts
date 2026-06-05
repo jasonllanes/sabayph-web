@@ -14,7 +14,7 @@ export function generateJoinCode(): string {
   return code;
 }
 
-export function useRooms(category = 'rotary') {
+export function useRooms(category = 'rotary', userId?: string) {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,15 +22,13 @@ export function useRooms(category = 'rotary') {
   const fetch = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error: err } = await supabase
-      .from('rooms')
-      .select('*')
-      .eq('category', category)
-      .order('created_at', { ascending: false });
+    let query = supabase.from('rooms').select('*').eq('category', category);
+    if (userId) query = query.eq('user_id', userId);
+    const { data, error: err } = await query.order('created_at', { ascending: false });
     if (err) setError(err.message);
     else setRooms((data as Room[]) ?? []);
     setLoading(false);
-  }, [category]);
+  }, [category, userId]);
 
   useEffect(() => { fetch(); }, [fetch]);
 

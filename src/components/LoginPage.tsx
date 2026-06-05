@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { ArrowRight, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { supabase } from '@/lib/supabase';
+import { normalizeEmail } from '@/lib/utils';
 
 const T = {
   bg: '#F1EDE1', surface: '#FFFFFF', surfaceAlt: '#E9E2D0',
@@ -36,7 +37,7 @@ export default function LoginPage({ onLogin, onBack, onGoToSignUp }: LoginPagePr
     setError('');
     setLoading(true);
 
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email: normalizeEmail(email), password });
 
     setLoading(false);
 
@@ -131,7 +132,7 @@ export default function LoginPage({ onLogin, onBack, onGoToSignUp }: LoginPagePr
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
             <img
-              src="/sabayph_logo.png"
+              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png"
               alt="SabayPH"
               style={{ width: 48, height: 48, borderRadius: 12, border: `2px solid ${T.primary}`, objectFit: 'cover' }}
             />

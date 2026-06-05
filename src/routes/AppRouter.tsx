@@ -23,11 +23,27 @@ function getJoinParam(): string {
   return new URLSearchParams(window.location.search).get('join') ?? '';
 }
 
+function getProfileParam(): string {
+  return new URLSearchParams(window.location.search).get('profile') ?? '';
+}
+
+async function checkOnboardingDone(userId: string): Promise<boolean> {
+  const seenLocal = localStorage.getItem('sabayph_onboarding_seen');
+  if (seenLocal) return true;
+  const { data } = await supabase
+    .from('profiles')
+    .select('onboarding_completed')
+    .eq('id', userId)
+    .single();
+  return data?.onboarding_completed ?? false;
+}
+
 export default function AppRouter() {
   const { session, loading, authEvent } = useAuth();
   const [view, setView] = useState<InternalView>('landing');
   const [pendingEmail, setPendingEmail] = useState('');
   const [pendingJoinCode, setPendingJoinCode] = useState(() => getJoinParam());
+  const [pendingProfileTag, setPendingProfileTag] = useState(() => getProfileParam());
   const initialLoadDone = useRef(false);
   const wasLoggedIn = useRef(false);
 
@@ -38,8 +54,15 @@ export default function AppRouter() {
       initialLoadDone.current = true;
       if (session) {
         wasLoggedIn.current = true;
-        const seenOnboarding = localStorage.getItem('sabayph_onboarding_seen');
-        setView(seenOnboarding ? 'app' : 'onboarding');
+        (async () => {
+          // Sync Google/OAuth avatar on every app load so it stays current
+          const avatarUrl = session.user.user_metadata?.avatar_url ?? null;
+          if (avatarUrl) {
+            supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', session.user.id).then(() => {});
+          }
+          const onboardingDone = await checkOnboardingDone(session.user.id);
+          setView(onboardingDone ? 'app' : 'onboarding');
+        })();
       }
       return;
     }
@@ -56,6 +79,13 @@ export default function AppRouter() {
             .select('profile_completed')
             .eq('id', userId)
             .single();
+
+          // Sync Google/OAuth avatar to profiles table so it shows in Discover
+          const avatarUrl = session?.user?.user_metadata?.avatar_url ?? null;
+          if (avatarUrl) {
+            supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', userId).then(() => {});
+          }
+
           setView(!data?.profile_completed ? 'profile-setup' : 'splash');
         })();
       } else {
@@ -73,13 +103,19 @@ export default function AppRouter() {
     await supabase.auth.signOut();
   };
 
-  const handleSplashDone = () => {
-    const seenOnboarding = localStorage.getItem('sabayph_onboarding_seen');
-    setView(seenOnboarding ? 'app' : 'onboarding');
+  const handleSplashDone = async () => {
+    const userId = session?.user?.id;
+    if (!userId) { setView('onboarding'); return; }
+    const onboardingDone = await checkOnboardingDone(userId);
+    setView(onboardingDone ? 'app' : 'onboarding');
   };
 
-  const handleOnboardingDone = () => {
+  const handleOnboardingDone = async () => {
     localStorage.setItem('sabayph_onboarding_seen', 'true');
+    const userId = session?.user?.id;
+    if (userId) {
+      await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', userId);
+    }
     setView('app');
   };
 
@@ -104,7 +140,7 @@ export default function AppRouter() {
   if (view === 'app') {
     return (
       <>
-        <AppShell user={user} onLogout={handleLogout} />
+        <AppShell user={user} onLogout={handleLogout} initialProfileTag={pendingProfileTag || undefined} />
         {pendingJoinCode && session && (
           <JoinRoomModal joinCode={pendingJoinCode} onClose={dismissJoin} />
         )}

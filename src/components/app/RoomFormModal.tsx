@@ -13,7 +13,7 @@ export interface RoomFormData {
   max_members: number;
   next_event: string;
   event_date: string;
-  status: 'live' | 'soon';
+  status: 'live' | 'soon' | 'confirmed' | 'completed' | 'cancelled';
   category: string;
   member_count: number;
   join_code: string;

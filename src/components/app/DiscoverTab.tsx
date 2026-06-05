@@ -83,8 +83,12 @@ function PersonCard({ person, theme: T, onView }: { person: DiscoverProfile; the
             <span style={{ fontFamily: '"Bricolage Grotesque",serif', fontWeight: 800, fontSize: 20, color: T.bg, position: 'absolute' }}>
               {(person.display_name ?? '?').charAt(0).toUpperCase()}
             </span>
-            <img src={getDefaultAvatar(person.gender, person.profile_tags)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            <img
+              src={person.avatar_url || getDefaultAvatar(person.gender, person.profile_tags)}
+              alt=""
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+              onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(person.gender, person.profile_tags); }}
+            />
           </div>
         </div>
 
@@ -168,7 +172,7 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
   const heroRef = useRef<HTMLDivElement | null>(null);
   const currentCategory = CATEGORIES.find(c => c.id === activeCategory) ?? null;
   const detail = currentCategory ? CATEGORY_DETAILS[activeCategory as keyof typeof CATEGORY_DETAILS] : null;
-  const heroImage = currentCategory?.image ?? '/cover.png';
+  const heroImage = currentCategory?.image ?? 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/cover.png';
   const heroCopy = HERO_COPY[activeCategory] ?? HERO_COPY['heritage']!;
 
   const liveCategories = CATEGORIES.filter(c => c.status === 'live');
@@ -427,7 +431,7 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
         <div style={{ background: theme.surface, border: `3px solid ${theme.text}`, borderRadius: 20, boxShadow: `6px 6px 0 ${theme.text}`, overflow: 'hidden' }}>
           <div style={{ height: 160, overflow: 'hidden', background: theme.surfaceAlt, position: 'relative' }}>
             <div style={{ position: 'absolute', inset: 0, opacity: 0.15, backgroundImage: `radial-gradient(circle, ${theme.border} 1.5px, transparent 1.5px)`, backgroundSize: '20px 20px' }} />
-            <img src="/safe.png" alt="Verified member" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center bottom' }} />
+            <img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/safe.png" alt="Verified member" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center bottom' }} />
             <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 8 }}>
               {[0, 1, 2].map(i => <PixelHeart key={i} color={theme.accent} size={16} />)}
             </div>

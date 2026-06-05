@@ -127,13 +127,13 @@ export const THEMES: Record<ThemeKey, Theme> = {
 };
 
 export const CATEGORIES: Category[] = [
-  { id: 'rotary',    name: 'Rotary',     tagline: 'Service above self',    Icon: HeartHandshake,  status: 'live', image: '/rotary.png' },
-  { id: 'pasabuy',   name: 'PasaBuy',    tagline: 'I\'ll buy it for you',  Icon: ShoppingBasket,  status: 'live', image: '/pasabuy.png' },
+  { id: 'rotary',    name: 'Rotary',     tagline: 'Service above self',    Icon: HeartHandshake,  status: 'live', image: 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/rotary.png' },
+  { id: 'pasabuy',   name: 'PasaBuy',    tagline: 'I\'ll buy it for you',  Icon: ShoppingBasket,  status: 'live', image: 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/pasabuy.png' },
   { id: 'travel',    name: 'Travel',     tagline: 'Find your kasama',      Icon: Plane,           status: 'soon', image: null },
   { id: 'hiking',    name: 'Hiking',     tagline: 'Akyat together',        Icon: Mountain,       status: 'soon', image: null },
-  { id: 'gaming',    name: 'Gaming',     tagline: 'Squad up, laro tayo',   Icon: Gamepad2,       status: 'live', image: '/gaming.png' },
+  { id: 'gaming',    name: 'Gaming',     tagline: 'Squad up, laro tayo',   Icon: Gamepad2,       status: 'live', image: 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/gaming.png' },
   { id: 'rideshare', name: 'Ride-share', tagline: 'Split the sakay',       Icon: Car,            status: 'soon', image: null },
-  { id: 'cafe',      name: 'Café',       tagline: 'Kape catch-ups',        Icon: Coffee,         status: 'live', image: '/coffee.png' },
+  { id: 'cafe',      name: 'Café',       tagline: 'Kape catch-ups',        Icon: Coffee,         status: 'live', image: 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/coffee.png' },
   { id: 'volunteer', name: 'Volunteer',  tagline: 'Tulong, sabay-sabay',   Icon: Users,          status: 'soon', image: null },
 ];
 

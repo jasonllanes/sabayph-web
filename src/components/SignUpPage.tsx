@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { ArrowRight, Eye, EyeOff, ChevronLeft } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { supabase } from '@/lib/supabase';
+import { normalizeEmail } from '@/lib/utils';
 
 const T = {
   bg: '#F1EDE1', surface: '#FFFFFF', surfaceAlt: '#E9E2D0',
@@ -63,7 +64,8 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
     }
 
     setLoading(true);
-    const { data, error: authError } = await supabase.auth.signUp({ email, password });
+    const canonicalEmail = normalizeEmail(email);
+    const { data, error: authError } = await supabase.auth.signUp({ email: canonicalEmail, password });
     setLoading(false);
 
     if (authError) {
@@ -71,7 +73,7 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
         authError.message?.toLowerCase().includes('confirmation email') ||
         authError.message?.toLowerCase().includes('sending')
       ) {
-        onSignUp((data as any)?.user?.email ?? email);
+        onSignUp((data as any)?.user?.email ?? canonicalEmail);
         return;
       }
       if (
@@ -88,7 +90,7 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
     }
 
     // Verification disabled — proceed directly regardless of session state
-    onSignUp(data.user?.email ?? email);
+    onSignUp(data.user?.email ?? canonicalEmail);
   };
 
   const handleGoogleSignUp = async () => {
@@ -169,7 +171,7 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
             <img
-              src="/sabayph_logo.png"
+              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png"
               alt="SabayPH"
               style={{ width: 48, height: 48, borderRadius: 12, border: `2px solid ${T.primary}`, objectFit: 'cover' }}
             />
@@ -241,6 +243,12 @@ export default function SignUpPage({ onSignUp, onNeedsVerification, onBack, onGo
                 placeholder="your@email.com"
                 style={inputStyle(emailFocus)}
               />
+              {/* Show canonical form when a plus-alias or extra dots are detected */}
+              {email.trim() && normalizeEmail(email) !== email.toLowerCase().trim() && (
+                <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 0' }}>
+                  Will be registered as <strong>{normalizeEmail(email)}</strong>
+                </p>
+              )}
             </div>
 
             <div>

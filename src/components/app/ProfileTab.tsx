@@ -4,8 +4,9 @@ import type { User } from '@supabase/supabase-js';
 import {
   Users, LogOut, ChevronDown,
   Bell, Lock, HelpCircle, Moon, Sun, Save, Check, Phone, Copy,
-  MapPin, X, ShieldCheck, ShieldAlert, Shield, Calendar, Sprout, AtSign, Navigation,
+  MapPin, X, ShieldCheck, ShieldAlert, Shield, Calendar, Sprout, AtSign, Navigation, Share2,
 } from 'lucide-react';
+import ShareProfileCard from '@/components/app/ShareProfileCard';
 import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { useProfile } from '@/hooks/useProfile';
@@ -35,23 +36,25 @@ function getVerifySteps(
   emailVerified: boolean,
   phoneAdded: boolean,
   locationPinned: boolean,
+  idVerified: boolean,
 ) {
   return [
-    { key: 'profile',  label: 'Complete your profile', sub: 'Display name, bio, and location', done: profileCompleted },
-    { key: 'email',    label: 'Verify email address',  sub: 'Confirm via email link',           done: emailVerified },
-    { key: 'phone',    label: 'Add phone number',       sub: 'Save your contact number',        done: phoneAdded },
-    { key: 'location', label: 'Pin home location',      sub: 'Mark your area on the map',       done: locationPinned },
+    { key: 'profile', label: 'Complete your profile', sub: 'Display name, bio, and location', done: profileCompleted },
+    { key: 'email', label: 'Verify email address', sub: 'Confirm via email link', done: emailVerified },
+    { key: 'phone', label: 'Add phone number', sub: 'Save your contact number', done: phoneAdded },
+    { key: 'location', label: 'Pin home location', sub: 'Mark your area on the map', done: locationPinned },
+    { key: 'id', label: 'Verify your ID', sub: 'Self-attest a government-issued ID', done: idVerified },
   ];
 }
 
 // ── Delete account modal ────────────────────────────────────────────────────
 
 function DeleteAccountSection({ onLogout, theme: T }: { onLogout: () => void; theme: any }) {
-  const [open, setOpen]           = useState(false);
+  const [open, setOpen] = useState(false);
   const [countdown, setCountdown] = useState(5);
-  const [ready, setReady]         = useState(false);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
+  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const openDialog = () => {
@@ -169,32 +172,42 @@ function DeleteAccountSection({ onLogout, theme: T }: { onLogout: () => void; th
   );
 }
 
+const TOTAL_VERIFY_STEPS = 5;
+
 function badgeConfig(count: number) {
-  if (count === 4) return { label: 'Fully verified',     color: '#15803D', bg: '#DCFCE7', border: '#86EFAC', Icon: ShieldCheck };
+  if (count === TOTAL_VERIFY_STEPS) return { label: 'Fully verified', color: '#15803D', bg: '#DCFCE7', border: '#86EFAC', Icon: ShieldCheck };
   if (count >= 2) return { label: 'Partially verified', color: '#A16207', bg: '#FEF9C3', border: '#FDE047', Icon: Shield };
-  if (count === 1) return { label: 'Getting started',   color: '#C2410C', bg: '#FFEDD5', border: '#FDBA74', Icon: ShieldAlert };
-  return             { label: 'Not verified',           color: '#6B7280', bg: '#F3F4F6', border: '#D1D5DB', Icon: ShieldAlert };
+  if (count === 1) return { label: 'Getting started', color: '#C2410C', bg: '#FFEDD5', border: '#FDBA74', Icon: ShieldAlert };
+  return { label: 'Not verified', color: '#6B7280', bg: '#F3F4F6', border: '#D1D5DB', Icon: ShieldAlert };
 }
 
-// ── Copyable user ID chip ─────────────────────────────────────────────────
+// ── Kasama tag chip ───────────────────────────────────────────────────────
 
-function UserIdChip({ userId, T }: { userId: string; T: { primary: string; surfaceAlt: string; border: string; textMuted: string; text: string } }) {
+function KasamaTagChip({ tag, T }: { tag: string; T: { primary: string; surfaceAlt: string; border: string; textMuted: string; text: string } }) {
   const [copied, setCopied] = useState(false);
-  const short = `${userId.slice(0, 8)}…`;
   const copy = () => {
-    navigator.clipboard.writeText(userId);
+    navigator.clipboard.writeText(tag);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
   return (
     <button
       onClick={copy}
-      title="Copy your User ID to share with friends"
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, border: `1.5px solid ${copied ? '#86EFAC' : T.border}`, background: copied ? '#DCFCE7' : T.surfaceAlt, color: copied ? '#15803D' : T.textMuted, fontSize: 11, fontWeight: 600, fontFamily: '"DM Sans",system-ui,sans-serif', cursor: 'pointer', transition: 'all 200ms', marginBottom: 6 }}
+      title="Copy your Kasama tag"
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '4px 11px', borderRadius: 20,
+        border: `1.5px solid ${copied ? '#86EFAC' : T.border}`,
+        background: copied ? '#DCFCE7' : T.surfaceAlt,
+        color: copied ? '#15803D' : T.primary,
+        fontSize: 12, fontWeight: 700,
+        fontFamily: '"VT323",monospace', letterSpacing: 1.5,
+        cursor: 'pointer', transition: 'all 200ms', marginBottom: 6,
+      }}
     >
       {copied
-        ? <><Check size={11} /> ID Copied!</>
-        : <><Copy size={11} /> ID: {short}</>}
+        ? <><Check size={11} /> Copied!</>
+        : <><Copy size={11} /> {tag.toUpperCase()}</>}
     </button>
   );
 }
@@ -265,6 +278,103 @@ function ProfileSkeleton({ T }: { T: Theme }) {
   );
 }
 
+// ── ID Verify form ────────────────────────────────────────────────────────────
+
+const PH_ID_TYPES = [
+  'PhilSys / National ID', "Driver's License (LTO)", 'Passport', 'SSS / UMID',
+  'PhilHealth ID', "Voter's ID (COMELEC)", 'TIN ID (BIR)', 'PRC License',
+  'Senior Citizen ID', 'Postal ID', 'Barangay ID',
+];
+
+interface IdVerifyFormProps {
+  T: any; inputSt: any;
+  idType: string; setIdType: (v: string) => void;
+  idLast4: string; setIdLast4: (v: string) => void;
+  idConfirm: boolean; setIdConfirm: (v: boolean) => void;
+  savingId: boolean; setSavingId: (v: boolean) => void;
+  idError: string; setIdError: (v: string) => void;
+  onClose: () => void; userId?: string;
+}
+
+function IdVerifyForm({ T, inputSt, idType, setIdType, idLast4, setIdLast4, idConfirm, setIdConfirm, savingId, setSavingId, idError, setIdError, onClose, userId }: IdVerifyFormProps) {
+  const handleSubmit = async () => {
+    if (!idType) { setIdError('Please select your ID type.'); return; }
+    if (idLast4.trim().length < 2) { setIdError('Enter at least the last 2 characters of your ID number.'); return; }
+    if (!idConfirm) { setIdError('Please confirm the information matches your actual ID.'); return; }
+    setIdError(''); setSavingId(true);
+    if (userId) {
+      const { error } = await supabase.from('profiles').update({
+        id_type: idType, id_last4: idLast4.trim().toUpperCase(), id_verified: true,
+      }).eq('id', userId);
+      if (error) { setIdError(error.message); setSavingId(false); return; }
+    }
+    setSavingId(false);
+    onClose();
+  };
+
+  return (
+    <div style={{ margin: '0 16px 16px', padding: 16, background: T.surfaceAlt, borderRadius: 14, border: `1.5px solid ${T.border}` }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div>
+          <p style={{ fontSize: 13, fontWeight: 800, color: T.text, margin: '0 0 3px', fontFamily: '"Bricolage Grotesque",serif' }}>
+            🪪 Self-attest your Government ID
+          </p>
+          <p style={{ fontSize: 11, color: T.textMuted, margin: 0, lineHeight: 1.5 }}>
+            We only store your ID type and last 4 characters — never the full number or a photo.
+          </p>
+        </div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex', flexShrink: 0, marginLeft: 8 }}>
+          <X size={15} />
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>ID TYPE *</label>
+          <select value={idType} onChange={e => setIdType(e.target.value)}
+            style={{ ...inputSt, height: 42, cursor: 'pointer' }}>
+            <option value="">Select your ID type…</option>
+            {PH_ID_TYPES.map(id => <option key={id} value={id}>{id}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>LAST 4 CHARACTERS OF ID NUMBER *</label>
+          <input
+            value={idLast4}
+            onChange={e => setIdLast4(e.target.value.slice(0, 4))}
+            placeholder="e.g. 7X3K"
+            maxLength={4}
+            style={{ ...inputSt, height: 42, fontFamily: '"VT323",monospace', fontSize: 20, letterSpacing: 4, textTransform: 'uppercase' }}
+          />
+          <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 0' }}>
+            Only the last portion — keeps your full ID number private.
+          </p>
+        </div>
+
+        <button type="button" onClick={() => setIdConfirm(!idConfirm)}
+          style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', textAlign: 'left' }}>
+          <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${idConfirm ? T.primary : T.border}`, background: idConfirm ? T.primary : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, transition: 'all 150ms' }}>
+            {idConfirm && <Check size={11} color="#fff" strokeWidth={3} />}
+          </div>
+          <p style={{ fontSize: 12, color: T.text, margin: 0, lineHeight: 1.5 }}>
+            I confirm I hold a valid <strong>{idType || 'government-issued ID'}</strong> and the information above accurately reflects it.
+          </p>
+        </button>
+
+        {idError && (
+          <p style={{ fontSize: 12, color: '#B91C1C', background: '#FEE2E2', padding: '8px 12px', borderRadius: 8, margin: 0 }}>{idError}</p>
+        )}
+
+        <button onClick={handleSubmit} disabled={savingId}
+          style={{ width: '100%', height: 44, borderRadius: 22, border: 'none', background: savingId ? T.border : T.primary, color: savingId ? T.textMuted : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: savingId ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+          {savingId ? 'Saving…' : <><Check size={15} /> Confirm Verification</>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, userId, dark, onToggleDark, onLogout }: ProfileTabProps) {
   const { profile, loading: profileLoading, saveProfile } = useProfile(userId);
   const stats = useUserStats(userId);
@@ -324,7 +434,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
 
   // Scroll refs for inline forms
   const profileEditRef = useRef<HTMLDivElement>(null);
-  const phoneInputRef  = useRef<HTMLDivElement>(null);
+  const phoneInputRef = useRef<HTMLDivElement>(null);
   const scrollToRef = (ref: React.RefObject<HTMLDivElement | null>) => {
     setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);
   };
@@ -342,6 +452,17 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
   // Email resend
   const [emailResendLoading, setEmailResendLoading] = useState(false);
   const [emailResendDone, setEmailResendDone] = useState(false);
+
+  // Share profile card
+  const [showShareCard, setShowShareCard] = useState(false);
+
+  // ID verification
+  const [idVerifyOpen, setIdVerifyOpen] = useState(false);
+  const [idType, setIdType] = useState('');
+  const [idLast4, setIdLast4] = useState('');
+  const [idConfirm, setIdConfirm] = useState(false);
+  const [savingId, setSavingId] = useState(false);
+  const [idError, setIdError] = useState('');
 
   if (profile && !profileLoaded) {
     setFb(profile.facebook_url ?? '');
@@ -390,6 +511,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
   const phoneAdded = !!(profile?.contact_phone);
   const locationPinned = profile?.home_lat != null;
   const profileCompleted = !!profile?.profile_completed;
+  const idVerified = !!(profile as any)?.id_verified;
   const currentPhone = profile?.contact_phone ?? supabaseUser?.phone ?? '';
 
   const yearJoined = supabaseUser?.created_at
@@ -400,7 +522,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
     : null;
   const isNewJoiner = daysSinceJoined !== null && daysSinceJoined < 90;
 
-  const verifySteps = getVerifySteps(profileCompleted, emailVerified, phoneAdded, locationPinned);
+  const verifySteps = getVerifySteps(profileCompleted, emailVerified, phoneAdded, locationPinned, idVerified);
   const doneCount = verifySteps.filter(s => s.done).length;
   const badge = badgeConfig(doneCount);
   const BadgeIcon = badge.Icon;
@@ -491,7 +613,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
     setSavingOnline(false);
   };
 
-  const PRONOUN_LABELS = ['He/Him','She/Her','They/Them','She/They','He/They'];
+  const PRONOUN_LABELS = ['He/Him', 'She/Her', 'They/Them', 'She/They', 'He/They'];
 
   const toggleTag = (label: string) => {
     const isPronoun = PRONOUN_LABELS.includes(label);
@@ -518,11 +640,11 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
     setEditError('');
     setSavingEdit(true);
     const { error } = await saveProfile({
-      display_name:      editName.trim(),
-      bio:               editBio.trim() || null,
-      age_range:         editAgeRange || null,
-      gender:            editGender || null,
-      location:          editLocation.trim() || null,
+      display_name: editName.trim(),
+      bio: editBio.trim() || null,
+      age_range: editAgeRange || null,
+      gender: editGender || null,
+      location: editLocation.trim() || null,
       ...(editMapLoc ? { home_lat: editMapLoc.lat, home_lng: editMapLoc.lng } : {}),
       profile_completed: true,
     } as any);
@@ -592,7 +714,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
             <h2 className="font-display" style={{ fontSize: 22, fontWeight: 800, color: T.text, margin: 0 }}>{user.name}</h2>
             {(() => {
-              const pronoun = profileTags.find(t => ['He/Him','She/Her','They/Them','She/They','He/They'].includes(t));
+              const pronoun = profileTags.find(t => ['He/Him', 'She/Her', 'They/Them', 'She/They', 'He/They'].includes(t));
               if (!pronoun) return null;
               const pr = PRONOUNS.find(p => p.label === pronoun);
               if (!pr) return null;
@@ -604,8 +726,37 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
             })()}
           </div>
           <p style={{ fontSize: 13, color: T.textMuted, margin: '0 0 8px' }}>{user.email}</p>
-          {/* Copyable user ID — for sharing with friends */}
-          {userId && <UserIdChip userId={userId} T={T} />}
+          {/* Kasama tag + share button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            {profile?.kasama_tag
+              ? <KasamaTagChip tag={profile.kasama_tag} T={T} />
+              : userId && (
+                <span style={{ fontSize: 11, color: T.textMuted, fontFamily: '"DM Sans",system-ui,sans-serif' }}>
+                  Tag generating…
+                </span>
+              )
+            }
+            {profile?.kasama_tag && (
+              <button
+                onClick={() => setShowShareCard(true)}
+                title="Share your profile card"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '4px 11px', borderRadius: 20,
+                  border: `1.5px solid ${T.border}`,
+                  background: T.primary, color: '#fff',
+                  marginTop: -6,
+                  fontSize: 12, fontWeight: 700,
+                  fontFamily: '"DM Sans",system-ui,sans-serif',
+                  cursor: 'pointer', transition: 'opacity 150ms',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                <Share2 size={11} /> Share
+              </button>
+            )}
+          </div>
 
           {/* Year joined + new joiner badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -647,9 +798,9 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
         {/* Stats — live from DB */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', borderTop: `1px solid ${T.border}` }}>
           {[
-            { value: stats.loading ? '…' : String(stats.roomsJoined),    label: 'Rooms joined' },
+            { value: stats.loading ? '…' : String(stats.roomsJoined), label: 'Rooms joined' },
             { value: stats.loading ? '…' : String(stats.eventsAttended), label: 'Events attended' },
-            { value: stats.loading ? '…' : ratingDisplay,                label: 'Kasama rating' },
+            { value: stats.loading ? '…' : ratingDisplay, label: 'Kasama rating' },
           ].map((s, i) => (
             <div key={i} style={{ padding: '16px 8px', textAlign: 'center', borderRight: i < 2 ? `1px solid ${T.border}` : 'none' }}>
               <p className="font-display" style={{ fontSize: 20, fontWeight: 800, color: T.primary, margin: 0 }}>{s.value}</p>
@@ -776,198 +927,227 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
         >
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: T.text, margin: '0 0 1px' }}>Verification Progress</p>
-            <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>{doneCount}/4 steps complete</p>
+            <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>{doneCount}/{TOTAL_VERIFY_STEPS} steps complete</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ padding: '4px 10px', borderRadius: 20, background: badge.bg, border: `1px solid ${badge.border}` }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: badge.color }}>{doneCount === 4 ? 'Verified ✓' : `${doneCount}/4`}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: badge.color }}>{doneCount === TOTAL_VERIFY_STEPS ? 'Verified ✓' : `${doneCount}/${TOTAL_VERIFY_STEPS}`}</span>
             </div>
             <ChevronDown size={16} style={{ color: T.textMuted, transition: 'transform 200ms', transform: verifyOpen ? 'rotate(180deg)' : 'none', flexShrink: 0 }} />
           </div>
         </div>
         {verifyOpen && (
           <>
-          <div style={{ padding: '0 16px 10px', borderTop: `1px solid ${T.border}` }}>
-          {/* Progress bar */}
-          <div style={{ background: T.surfaceAlt, borderRadius: 6, height: 8, overflow: 'hidden', margin: '14px 0' }}>
-            <div style={{ height: '100%', borderRadius: 6, width: `${(doneCount / 4) * 100}%`, background: doneCount === 4 ? '#15803D' : doneCount >= 2 ? '#EAB308' : doneCount === 1 ? T.highlight : T.border, transition: 'width 600ms ease' }} />
-          </div>
-
-          {/* Steps */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {verifySteps.map((step, i) => (
-              <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, background: step.done ? '#F0FDF4' : T.surfaceAlt, border: `1px solid ${step.done ? '#86EFAC' : T.border}`, transition: 'all 200ms ease' }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: step.done ? '#15803D' : T.border, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 200ms ease' }}>
-                  {step.done
-                    ? <Check size={14} style={{ color: '#fff' }} />
-                    : <span style={{ fontSize: 12, fontWeight: 700, color: T.surface }}>{i + 1}</span>
-                  }
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: step.done ? '#15803D' : T.text, margin: 0 }}>{step.label}</p>
-                  <p style={{ fontSize: 11, color: T.textMuted, margin: 0 }}>{step.sub}</p>
-                </div>
-                {step.key === 'profile' && (
-                  <button onClick={() => { setProfileEditOpen(o => !o); setEditError(''); scrollToRef(profileEditRef); }}
-                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: step.done ? '#DCFCE7' : T.highlight, color: step.done ? '#15803D' : '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                    {step.done ? 'Edit' : 'Set up'}
-                  </button>
-                )}
-                {!step.done && step.key === 'email' && (
-                  <button onClick={handleResendEmail} disabled={emailResendLoading || emailResendDone}
-                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: emailResendDone ? '#DCFCE7' : T.highlight, color: emailResendDone ? '#15803D' : '#06131B', cursor: emailResendDone ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                    {emailResendDone ? '✓ Sent' : emailResendLoading ? '…' : 'Resend'}
-                  </button>
-                )}
-                {!step.done && step.key === 'phone' && !phoneInputOpen && (
-                  <button onClick={() => { setPhoneInputOpen(true); setPhoneError(''); scrollToRef(phoneInputRef); }}
-                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: T.highlight, color: '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                    Add
-                  </button>
-                )}
-                {step.done && step.key === 'phone' && (
-                  <button onClick={() => { setPhoneInputOpen(o => !o); setPhoneError(''); scrollToRef(phoneInputRef); }}
-                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: '#DCFCE7', color: '#15803D', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                    Edit
-                  </button>
-                )}
-                {step.key === 'location' && (
-                  <button onClick={() => { setLocationDialogOpen(true); setLocationError(''); }}
-                    style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: step.done ? '#DCFCE7' : T.highlight, color: step.done ? '#15803D' : '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                    {step.done ? 'Edit' : 'Pin'}
-                  </button>
-                )}
+            <div style={{ padding: '0 16px 10px', borderTop: `1px solid ${T.border}` }}>
+              {/* Progress bar */}
+              <div style={{ background: T.surfaceAlt, borderRadius: 6, height: 8, overflow: 'hidden', margin: '14px 0' }}>
+                <div style={{ height: '100%', borderRadius: 6, width: `${(doneCount / TOTAL_VERIFY_STEPS) * 100}%`, background: doneCount === TOTAL_VERIFY_STEPS ? '#15803D' : doneCount >= 2 ? '#EAB308' : doneCount === 1 ? T.highlight : T.border, transition: 'width 600ms ease' }} />
               </div>
-            ))}
-          </div>
-        </div>
 
-        {/* ── Inline profile edit ── */}
-        {profileEditOpen && (
-          <div ref={profileEditRef} style={{ margin: '0 16px 16px', padding: 16, background: T.surfaceAlt, borderRadius: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: T.text, margin: 0 }}>Edit your profile</p>
-              <button onClick={() => setProfileEditOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex' }}>
-                <X size={16} />
-              </button>
+              {/* Steps */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {verifySteps.map((step, i) => (
+                  <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, background: step.done ? '#F0FDF4' : T.surfaceAlt, border: `1px solid ${step.done ? '#86EFAC' : T.border}`, transition: 'all 200ms ease' }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: step.done ? '#15803D' : T.border, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 200ms ease' }}>
+                      {step.done
+                        ? <Check size={14} style={{ color: '#fff' }} />
+                        : <span style={{ fontSize: 12, fontWeight: 700, color: T.surface }}>{i + 1}</span>
+                      }
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: step.done ? '#15803D' : T.text, margin: 0 }}>{step.label}</p>
+                      <p style={{ fontSize: 11, color: T.textMuted, margin: 0 }}>{step.sub}</p>
+                    </div>
+                    {step.key === 'profile' && (
+                      <button onClick={() => { setProfileEditOpen(o => !o); setEditError(''); scrollToRef(profileEditRef); }}
+                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: step.done ? '#DCFCE7' : T.highlight, color: step.done ? '#15803D' : '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        {step.done ? 'Edit' : 'Set up'}
+                      </button>
+                    )}
+                    {!step.done && step.key === 'email' && (
+                      <button onClick={handleResendEmail} disabled={emailResendLoading || emailResendDone}
+                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: emailResendDone ? '#DCFCE7' : T.highlight, color: emailResendDone ? '#15803D' : '#06131B', cursor: emailResendDone ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        {emailResendDone ? '✓ Sent' : emailResendLoading ? '…' : 'Resend'}
+                      </button>
+                    )}
+                    {!step.done && step.key === 'phone' && !phoneInputOpen && (
+                      <button onClick={() => { setPhoneInputOpen(true); setPhoneError(''); scrollToRef(phoneInputRef); }}
+                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: T.highlight, color: '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        Add
+                      </button>
+                    )}
+                    {step.done && step.key === 'phone' && (
+                      <button onClick={() => { setPhoneInputOpen(o => !o); setPhoneError(''); scrollToRef(phoneInputRef); }}
+                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: '#DCFCE7', color: '#15803D', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        Edit
+                      </button>
+                    )}
+                    {step.key === 'location' && (
+                      <button onClick={() => { setLocationDialogOpen(true); setLocationError(''); }}
+                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: step.done ? '#DCFCE7' : T.highlight, color: step.done ? '#15803D' : '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        {step.done ? 'Edit' : 'Pin'}
+                      </button>
+                    )}
+                    {step.key === 'id' && !step.done && (
+                      <button onClick={() => { setIdVerifyOpen(o => !o); setIdError(''); }}
+                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: T.highlight, color: '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        Verify
+                      </button>
+                    )}
+                    {step.key === 'id' && step.done && (
+                      <span style={{ padding: '5px 12px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#15803D' }}>✓ Done</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {/* Name */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>DISPLAY NAME <span style={{ color: '#C82718' }}>*</span></label>
-                <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="What should we call you?" maxLength={40}
-                  style={{ ...inputSt, height: 42 }} />
-              </div>
-
-              {/* Age range */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 6, letterSpacing: 0.4 }}>AGE RANGE</label>
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                  {['18–24','25–34','35–44','45+'].map(r => (
-                    <button key={r} type="button" onClick={() => setEditAgeRange(editAgeRange === r ? '' : r)}
-                      style={{ padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${editAgeRange === r ? T.primary : T.border}`, background: editAgeRange === r ? `${T.primary}12` : T.surface, color: editAgeRange === r ? T.primary : T.textMuted, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'all 150ms' }}>
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Gender */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 6, letterSpacing: 0.4 }}>GENDER</label>
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                  {['Lalaki','Babae','Non-binary','Prefer not to say'].map(g => (
-                    <button key={g} type="button" onClick={() => setEditGender(editGender === g ? '' : g)}
-                      style={{ padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${editGender === g ? T.primary : T.border}`, background: editGender === g ? `${T.primary}12` : T.surface, color: editGender === g ? T.primary : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'all 150ms' }}>
-                      {g}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* City / Area — map picker */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>CITY / AREA</label>
-                <Suspense fallback={
-                  <input value={editLocation} onChange={e => setEditLocation(e.target.value)} placeholder="e.g. Cagayan de Oro, Davao…" maxLength={60}
-                    style={{ ...inputSt, height: 42 }} />
-                }>
-                  <MapPicker
-                    value={editMapLoc}
-                    onChange={loc => { setEditMapLoc(loc); setEditLocation(loc.name.split(',').slice(0, 2).join(', ')); }}
-                    height={220}
-                    theme={{ primary: T.primary, bg: T.bg, surface: T.surface, surfaceAlt: T.surfaceAlt, text: T.text, textMuted: T.textMuted, border: T.border } as MapPickerTheme}
-                  />
-                </Suspense>
-              </div>
-
-              {/* Bio */}
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>SHORT BIO</label>
-                <textarea value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="Tell the community a bit about yourself…" maxLength={120} rows={3}
-                  style={{ ...inputSt, height: 'auto', padding: '10px 14px', resize: 'none', lineHeight: 1.5 }} />
-                <p style={{ fontSize: 11, color: T.textMuted, margin: '3px 0 0', textAlign: 'right' }}>{editBio.length}/120</p>
-              </div>
-
-              {editError && (
-                <p style={{ fontSize: 12, color: '#B91C1C', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '7px 10px', margin: 0 }}>{editError}</p>
-              )}
-
-              <button onClick={handleSaveProfileEdit} disabled={savingEdit || !editName.trim()}
-                style={{ width: '100%', height: 42, borderRadius: 21, border: 'none', background: (!editName.trim() || savingEdit) ? T.border : T.primary, color: (!editName.trim() || savingEdit) ? T.textMuted : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: (!editName.trim() || savingEdit) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, transition: 'background 200ms' }}>
-                {savingEdit ? 'Saving…' : savedEdit ? <><Check size={14} /> Saved!</> : <><Save size={14} /> Save Profile</>}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Inline phone input — no OTP */}
-        {phoneInputOpen && (
-          <div ref={phoneInputRef} style={{ margin: '0 16px 16px', padding: 14, background: T.surfaceAlt, borderRadius: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, color: T.text, margin: 0 }}>
-                {phoneAdded ? 'Update phone number' : 'Add your phone number'}
-              </p>
-              <button onClick={() => setPhoneInputOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex' }}>
-                <X size={16} />
-              </button>
-            </div>
-            <input
-              value={contactPhone}
-              onChange={e => setContactPhone(e.target.value)}
-              placeholder="+63 917 123 4567"
-              style={inputSt}
-            />
-            <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 10px' }}>
-              Include country code, e.g. +63 for Philippines
-            </p>
-            {phoneError && (
-              <p style={{ fontSize: 12, color: '#B91C1C', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '7px 10px', margin: '0 0 10px' }}>{phoneError}</p>
+            {/* ── ID Verification inline form ── */}
+            {idVerifyOpen && !idVerified && (
+              <IdVerifyForm
+                T={T}
+                inputSt={inputSt}
+                idType={idType}
+                setIdType={setIdType}
+                idLast4={idLast4}
+                setIdLast4={setIdLast4}
+                idConfirm={idConfirm}
+                setIdConfirm={setIdConfirm}
+                savingId={savingId}
+                idError={idError}
+                setIdError={setIdError}
+                setSavingId={setSavingId}
+                onClose={() => setIdVerifyOpen(false)}
+                userId={userId}
+              />
             )}
-            <button
-              onClick={handleSavePhone}
-              disabled={savingPhone || !contactPhone.trim()}
-              style={{ width: '100%', height: 40, borderRadius: 20, border: 'none', background: (!contactPhone.trim() || savingPhone) ? T.border : T.primary, color: (!contactPhone.trim() || savingPhone) ? T.textMuted : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: (!contactPhone.trim() || savingPhone) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'background 200ms' }}
-            >
-              {savingPhone ? 'Saving…' : <><Phone size={14} /> Save Number</>}
-            </button>
-          </div>
-        )}
 
-        {savedPhone && (
-          <div style={{ margin: '0 16px 16px', padding: '10px 14px', background: '#DCFCE7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ShieldCheck size={16} style={{ color: '#15803D' }} />
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#15803D', margin: 0 }}>Phone number saved!</p>
-          </div>
-        )}
+            {/* ── Inline profile edit ── */}
+            {profileEditOpen && (
+              <div ref={profileEditRef} style={{ margin: '0 16px 16px', padding: 16, background: T.surfaceAlt, borderRadius: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: T.text, margin: 0 }}>Edit your profile</p>
+                  <button onClick={() => setProfileEditOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex' }}>
+                    <X size={16} />
+                  </button>
+                </div>
 
-        {savedLocation && (
-          <div style={{ margin: '0 16px 8px', padding: '10px 14px', background: '#DCFCE7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <ShieldCheck size={16} style={{ color: '#15803D' }} />
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#15803D', margin: 0 }}>Home location saved!</p>
-          </div>
-        )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* Name */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>DISPLAY NAME <span style={{ color: '#C82718' }}>*</span></label>
+                    <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="What should we call you?" maxLength={40}
+                      style={{ ...inputSt, height: 42 }} />
+                  </div>
+
+                  {/* Age range */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 6, letterSpacing: 0.4 }}>AGE RANGE</label>
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      {['18–24', '25–34', '35–44', '45+'].map(r => (
+                        <button key={r} type="button" onClick={() => setEditAgeRange(editAgeRange === r ? '' : r)}
+                          style={{ padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${editAgeRange === r ? T.primary : T.border}`, background: editAgeRange === r ? `${T.primary}12` : T.surface, color: editAgeRange === r ? T.primary : T.textMuted, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'all 150ms' }}>
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Gender */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 6, letterSpacing: 0.4 }}>GENDER</label>
+                    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                      {['Lalaki', 'Babae', 'Non-binary', 'Prefer not to say'].map(g => (
+                        <button key={g} type="button" onClick={() => setEditGender(editGender === g ? '' : g)}
+                          style={{ padding: '5px 13px', borderRadius: 20, border: `1.5px solid ${editGender === g ? T.primary : T.border}`, background: editGender === g ? `${T.primary}12` : T.surface, color: editGender === g ? T.primary : T.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'all 150ms' }}>
+                          {g}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* City / Area — map picker */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>CITY / AREA</label>
+                    <Suspense fallback={
+                      <input value={editLocation} onChange={e => setEditLocation(e.target.value)} placeholder="e.g. Cagayan de Oro, Davao…" maxLength={60}
+                        style={{ ...inputSt, height: 42 }} />
+                    }>
+                      <MapPicker
+                        value={editMapLoc}
+                        onChange={loc => { setEditMapLoc(loc); setEditLocation(loc.name.split(',').slice(0, 2).join(', ')); }}
+                        height={220}
+                        theme={{ primary: T.primary, bg: T.bg, surface: T.surface, surfaceAlt: T.surfaceAlt, text: T.text, textMuted: T.textMuted, border: T.border } as MapPickerTheme}
+                      />
+                    </Suspense>
+                  </div>
+
+                  {/* Bio */}
+                  <div>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>SHORT BIO</label>
+                    <textarea value={editBio} onChange={e => setEditBio(e.target.value)} placeholder="Tell the community a bit about yourself…" maxLength={120} rows={3}
+                      style={{ ...inputSt, height: 'auto', padding: '10px 14px', resize: 'none', lineHeight: 1.5 }} />
+                    <p style={{ fontSize: 11, color: T.textMuted, margin: '3px 0 0', textAlign: 'right' }}>{editBio.length}/120</p>
+                  </div>
+
+                  {editError && (
+                    <p style={{ fontSize: 12, color: '#B91C1C', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '7px 10px', margin: 0 }}>{editError}</p>
+                  )}
+
+                  <button onClick={handleSaveProfileEdit} disabled={savingEdit || !editName.trim()}
+                    style={{ width: '100%', height: 42, borderRadius: 21, border: 'none', background: (!editName.trim() || savingEdit) ? T.border : T.primary, color: (!editName.trim() || savingEdit) ? T.textMuted : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: (!editName.trim() || savingEdit) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, transition: 'background 200ms' }}>
+                    {savingEdit ? 'Saving…' : savedEdit ? <><Check size={14} /> Saved!</> : <><Save size={14} /> Save Profile</>}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Inline phone input — no OTP */}
+            {phoneInputOpen && (
+              <div ref={phoneInputRef} style={{ margin: '0 16px 16px', padding: 14, background: T.surfaceAlt, borderRadius: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: T.text, margin: 0 }}>
+                    {phoneAdded ? 'Update phone number' : 'Add your phone number'}
+                  </p>
+                  <button onClick={() => setPhoneInputOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex' }}>
+                    <X size={16} />
+                  </button>
+                </div>
+                <input
+                  value={contactPhone}
+                  onChange={e => setContactPhone(e.target.value)}
+                  placeholder="+63 917 123 4567"
+                  style={inputSt}
+                />
+                <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 10px' }}>
+                  Include country code, e.g. +63 for Philippines
+                </p>
+                {phoneError && (
+                  <p style={{ fontSize: 12, color: '#B91C1C', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 8, padding: '7px 10px', margin: '0 0 10px' }}>{phoneError}</p>
+                )}
+                <button
+                  onClick={handleSavePhone}
+                  disabled={savingPhone || !contactPhone.trim()}
+                  style={{ width: '100%', height: 40, borderRadius: 20, border: 'none', background: (!contactPhone.trim() || savingPhone) ? T.border : T.primary, color: (!contactPhone.trim() || savingPhone) ? T.textMuted : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: (!contactPhone.trim() || savingPhone) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'background 200ms' }}
+                >
+                  {savingPhone ? 'Saving…' : <><Phone size={14} /> Save Number</>}
+                </button>
+              </div>
+            )}
+
+            {savedPhone && (
+              <div style={{ margin: '0 16px 16px', padding: '10px 14px', background: '#DCFCE7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShieldCheck size={16} style={{ color: '#15803D' }} />
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#15803D', margin: 0 }}>Phone number saved!</p>
+              </div>
+            )}
+
+            {savedLocation && (
+              <div style={{ margin: '0 16px 8px', padding: '10px 14px', background: '#DCFCE7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShieldCheck size={16} style={{ color: '#15803D' }} />
+                <p style={{ fontSize: 13, fontWeight: 600, color: '#15803D', margin: 0 }}>Home location saved!</p>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1231,6 +1411,21 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
             </div>
           </div>
         </div>
+      )}
+
+      {/* Share profile card dialog */}
+      {showShareCard && profile?.kasama_tag && (
+        <ShareProfileCard
+          onClose={() => setShowShareCard(false)}
+          theme={T}
+          displayName={user.name}
+          kasamaTag={profile.kasama_tag}
+          location={profile.location}
+          gender={profile.gender}
+          profileTags={profileTags}
+          avatarUrl={avatarUrl}
+          kasamaRating={stats.kasamaRating}
+        />
       )}
     </div>
   );

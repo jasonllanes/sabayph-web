@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Search, X, Navigation, Users, Lock, Home, Send, Check, Map } from 'lucide-react';
+import { MapPin, Search, X, Navigation, Users, Lock, Home, Send, Check, Map, Calendar, Gamepad2, ShoppingBasket, Coffee, Heart, Clock } from 'lucide-react';
+import type { Room } from '@/types';
 import { useProfile } from '@/hooks/useProfile';
 import { submitJoinRequest, getMyRequestStatus } from '@/hooks/useJoinRequests';
 import { MapContainer, TileLayer, Marker, Circle, useMapEvents } from 'react-leaflet';
@@ -20,6 +21,218 @@ L.Icon.Default.mergeOptions({
 const RADIUS_OPTIONS = [5, 10, 25, 50] as const;
 const PH_CENTER: [number, number] = [12.8797, 121.774];
 const LIVE_CATEGORIES = CATEGORIES.filter(c => c.status === 'live');
+
+const IMG = (n: string) =>
+  `https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/${n}`;
+
+const CAT_STYLE: Record<string, {
+  headerBg: string; headerText: string; badgeBg: string; badgeText: string;
+  image: string; Icon: typeof Gamepad2; whatLabel: string;
+}> = {
+  rotary:  { headerBg: '#9F5E0F', headerText: '#FEF3E2', badgeBg: '#FEF3E2', badgeText: '#9F5E0F', image: IMG('rotary.png'),  Icon: Heart,          whatLabel: 'Service' },
+  gaming:  { headerBg: '#1E1B4B', headerText: '#EDE9FE', badgeBg: '#EDE9FE', badgeText: '#4F46E5', image: IMG('gaming.png'),  Icon: Gamepad2,       whatLabel: 'Game' },
+  cafe:    { headerBg: '#7F3B19', headerText: '#FEF3E2', badgeBg: '#FEF3E2', badgeText: '#7F3B19', image: IMG('coffee.png'),  Icon: Coffee,         whatLabel: 'Venue' },
+  pasabuy: { headerBg: '#B45309', headerText: '#FFFBEB', badgeBg: '#FFFBEB', badgeText: '#B45309', image: IMG('pasabuy.png'), Icon: ShoppingBasket, whatLabel: 'Items' },
+};
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) + ', ' +
+    d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' });
+}
+
+function fmtNeededBy(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diff = d.getTime() - Date.now();
+  const hrs = Math.round(diff / 3_600_000);
+  if (hrs < 0) return 'Overdue';
+  if (hrs < 1) return 'Due soon';
+  if (hrs < 24) return `in ${hrs}h`;
+  return `by ${d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`;
+}
+
+interface RoomCardProps {
+  room: Room;
+  userId?: string;
+  outerTheme: { border: string; text: string; surface: string; surfaceAlt: string; primary: string; bg: string; textMuted: string; accent: string };
+  reqState: string;
+  requestingId: string | null;
+  requestMsg: string;
+  joinError?: string;
+  onRequestMsg: (v: string) => void;
+  onOpenRequest: () => void;
+  onSendRequest: () => void;
+  onCancelRequest: () => void;
+}
+
+function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, requestMsg, joinError, onRequestMsg, onOpenRequest, onSendRequest, onCancelRequest }: RoomCardProps) {
+  const cat = CAT_STYLE[room.category] ?? CAT_STYLE.rotary;
+  const CatIcon = cat.Icon;
+  const isOwn = userId === room.user_id;
+  const isOpen = requestingId === room.id;
+  const pct = Math.min(100, Math.round((room.member_count / room.max_members) * 100));
+
+  const memberLabel = room.category === 'gaming' ? 'players'
+    : room.category === 'cafe' ? 'guests'
+    : room.category === 'pasabuy' ? 'agents'
+    : 'members';
+
+  // What to show for the "what" row
+  const whatValue = room.category === 'gaming'
+    ? room.game_name ?? null
+    : room.category === 'pasabuy'
+    ? (room.items?.length ? `${room.items.length} item${room.items.length !== 1 ? 's' : ''} · ${room.items.slice(0, 2).map(i => i.name).join(', ')}${room.items.length > 2 ? ` +${room.items.length - 2}` : ''}` : room.location_name)
+    : room.location_name;
+
+  const whenValue = room.category === 'pasabuy'
+    ? fmtNeededBy(room.needed_by ?? room.event_date)
+    : fmtDate(room.event_date);
+
+  const whereValue = room.category === 'gaming'
+    ? (room.game_id ? `ID: ${room.game_id}` : null)
+    : room.category === 'pasabuy'
+    ? (room.dropoff_name ?? room.location_name)
+    : room.location_name;
+
+  return (
+    <div style={{
+      borderRadius: 18, overflow: 'hidden',
+      border: `2px solid ${cat.headerBg}33`,
+      boxShadow: `4px 4px 0 ${cat.headerBg}22`,
+      transition: 'box-shadow 150ms ease, transform 150ms ease',
+      background: T.surface,
+    }}
+      onMouseEnter={e => { (e.currentTarget.style.boxShadow = `6px 6px 0 ${cat.headerBg}55`); (e.currentTarget.style.transform = 'translateY(-1px)'); }}
+      onMouseLeave={e => { (e.currentTarget.style.boxShadow = `4px 4px 0 ${cat.headerBg}22`); (e.currentTarget.style.transform = 'none'); }}
+    >
+      {/* ── Colored header ── */}
+      <div style={{ background: cat.headerBg, padding: '14px 16px 12px', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        {/* Grid pattern */}
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.08, backgroundImage: 'linear-gradient(rgba(255,255,255,0.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.8) 1px,transparent 1px)', backgroundSize: '14px 14px', pointerEvents: 'none' }} />
+
+        <div style={{ position: 'relative', flex: 1 }}>
+          {/* Badges row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6, flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 800, background: cat.badgeBg, color: cat.badgeText, padding: '2px 8px', borderRadius: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <CatIcon size={9} />{room.category}
+            </span>
+            {room.status === 'live' && <span style={{ fontSize: 9, fontWeight: 800, background: '#C82718', color: '#fff', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
+            {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 700, background: 'rgba(0,0,0,0.3)', color: cat.headerText, padding: '2px 7px', borderRadius: 8 }}><Lock size={8} />PRIVATE</span>}
+          </div>
+
+          <h3 style={{ fontFamily: '"Bricolage Grotesque",serif', fontSize: 16, fontWeight: 800, color: cat.headerText, margin: '0 0 2px', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
+            {room.name}
+          </h3>
+          <p style={{ fontSize: 11, color: `${cat.headerText}aa`, margin: 0, fontWeight: 500 }}>by {room.host_name}</p>
+        </div>
+
+        {/* Category image */}
+        <img src={cat.image} alt="" style={{ width: 52, height: 52, objectFit: 'contain', flexShrink: 0, position: 'relative', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }} />
+      </div>
+
+      {/* ── Card body ── */}
+      <div style={{ padding: '12px 16px 14px' }}>
+        {/* WHEN / WHERE / WHAT rows */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
+          {whenValue && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.text }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${cat.headerBg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {room.category === 'pasabuy' ? <Clock size={11} style={{ color: cat.headerBg }} /> : <Calendar size={11} style={{ color: cat.headerBg }} />}
+              </div>
+              <span style={{ fontWeight: 600 }}>{whenValue}</span>
+            </div>
+          )}
+          {whereValue && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.textMuted }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${cat.headerBg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {room.category === 'gaming' ? <Gamepad2 size={11} style={{ color: cat.headerBg }} /> : <MapPin size={11} style={{ color: cat.headerBg }} />}
+              </div>
+              <span>{whereValue}</span>
+            </div>
+          )}
+          {whatValue && room.category !== 'pasabuy' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.textMuted }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${cat.headerBg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CatIcon size={11} style={{ color: cat.headerBg }} />
+              </div>
+              <span>{whatValue}</span>
+            </div>
+          )}
+          {room.category === 'pasabuy' && whatValue && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12, color: T.textMuted }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${cat.headerBg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                <ShoppingBasket size={11} style={{ color: cat.headerBg }} />
+              </div>
+              <span style={{ lineHeight: 1.4 }}>{whatValue}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Description */}
+        {room.description && (
+          <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 10px', lineHeight: 1.5, borderLeft: `2px solid ${cat.headerBg}44`, paddingLeft: 8 }}>
+            {room.description.length > 100 ? room.description.slice(0, 100) + '…' : room.description}
+          </p>
+        )}
+
+        {/* Member bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: pct >= 90 ? '#C82718' : cat.headerBg, transition: 'width 400ms ease' }} />
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, flexShrink: 0 }}>
+            {room.member_count}/{room.max_members} {memberLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Join action ── */}
+      {userId && !isOwn && (
+        <div style={{ borderTop: `1px solid ${T.border}`, padding: '10px 14px', background: `${cat.headerBg}08` }}>
+          {reqState === 'pending' || reqState === 'approved' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#15803D', fontWeight: 600 }}>
+              <Check size={14} />
+              {reqState === 'approved' ? 'Request approved!' : 'Request sent — awaiting approval'}
+            </div>
+          ) : isOpen ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input
+                value={requestMsg}
+                onChange={e => onRequestMsg(e.target.value)}
+                placeholder="Optional message to the host…"
+                maxLength={120}
+                style={{ width: '100%', height: 40, padding: '0 12px', fontSize: 13, fontFamily: 'inherit', border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.surface, color: T.text, outline: 'none', boxSizing: 'border-box' as const }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={onSendRequest} disabled={reqState === 'sending'}
+                  style={{ flex: 1, height: 36, borderRadius: 18, border: 'none', background: cat.headerBg, color: cat.headerText, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Send size={13} /> {reqState === 'sending' ? 'Sending…' : 'Send Request'}
+                </button>
+                <button onClick={onCancelRequest}
+                  style={{ height: 36, padding: '0 14px', borderRadius: 18, border: `1.5px solid ${T.border}`, background: 'none', color: T.textMuted, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {joinError && (
+                <p style={{ fontSize: 11, color: '#B91C1C', background: '#FEE2E2', padding: '6px 10px', borderRadius: 8, margin: '0 0 8px' }}>{joinError}</p>
+              )}
+              <button onClick={onOpenRequest}
+                style={{ width: '100%', height: 36, borderRadius: 18, border: `1.5px solid ${cat.headerBg}`, background: `${cat.headerBg}12`, color: cat.headerBg, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Send size={13} />
+                {room.category === 'pasabuy' ? 'Apply as Agent' : 'Request to Join'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function makeRoomIcon(color: string) {
   return L.divIcon({
@@ -90,11 +303,11 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
   const { rooms, roomsWithCoords, locationGroups, loading, total } =
     useExploreRooms(search, category, center, radiusKm);
 
+  // Show all rooms by default; filter by location group or map center when active.
+  // PasaBuy rooms have no lat/lng so they must always be reachable without a map filter.
   const displayRooms = selectedLoc
     ? rooms.filter(r => (r.location_name ?? 'No location set') === selectedLoc)
-    : center
-      ? rooms
-      : null;
+    : rooms;
 
   const checkRequestStatus = async (roomId: string) => {
     if (!userId || requestStates[roomId]) return;
@@ -102,17 +315,26 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
     setRequestStates(prev => ({ ...prev, [roomId]: status }));
   };
 
+  const [joinError, setJoinError] = useState<Record<string, string>>({});
+
   const handleRequestJoin = async (roomId: string, roomName: string) => {
-    if (!userId || !profile) return;
+    if (!userId) return;
+    const displayName = profile?.display_name ?? roomName;
     setRequestStates(prev => ({ ...prev, [roomId]: 'sending' }));
+    setJoinError(prev => ({ ...prev, [roomId]: '' }));
     const { error } = await submitJoinRequest(
       userId, roomId,
-      profile.display_name ?? roomName,
+      displayName,
       requestMsg.trim() || undefined,
     );
-    setRequestStates(prev => ({ ...prev, [roomId]: error ? 'none' : 'pending' }));
-    setRequestingId(null);
-    setRequestMsg('');
+    if (error) {
+      setRequestStates(prev => ({ ...prev, [roomId]: 'none' }));
+      setJoinError(prev => ({ ...prev, [roomId]: error }));
+    } else {
+      setRequestStates(prev => ({ ...prev, [roomId]: 'pending' }));
+      setRequestingId(null);
+      setRequestMsg('');
+    }
   };
 
   const openMapDialog = () => {
@@ -183,7 +405,7 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
             </div>
           </div>
           <div style={{ flex: '0 0 45%', position: 'relative', overflow: 'hidden' }}>
-            <img src={selectedCat.image ?? '/cover.png'} alt={selectedCat.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+            <img src={selectedCat.image ?? 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/cover.png'} alt={selectedCat.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 50%, rgba(0,0,0,0.25) 100%)' }} />
           </div>
         </div>
@@ -336,84 +558,27 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
 
         {/* ── Room cards ── */}
         {displayRooms && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {displayRooms.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '32px 0', color: T.textMuted }}>
                 <p style={{ fontSize: 14, margin: 0 }}>No rooms here yet.</p>
               </div>
             ) : (
               displayRooms.map(room => (
-                <div key={room.id}
-                  style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 16, overflow: 'hidden', transition: 'box-shadow 150ms ease' }}
-                  onMouseEnter={e => { checkRequestStatus(room.id); (e.currentTarget.style.boxShadow = `4px 4px 0 ${T.text}`); }}
-                  onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
-                >
-                  <div style={{ padding: '14px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, background: T.surfaceAlt, color: T.primary, padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{room.category}</span>
-                          {room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: T.accent, color: '#fff', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
-                          {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, background: T.border, color: T.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} />PRIVATE</span>}
-                        </div>
-                        <p className="font-display" style={{ fontSize: 15, fontWeight: 700, color: T.text, margin: '0 0 2px' }}>{room.name}</p>
-                        <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>by {room.host_name}</p>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: T.textMuted, flexShrink: 0 }}>
-                        <Users size={13} />
-                        <span>{room.member_count}/{room.max_members}</span>
-                      </div>
-                    </div>
-                    {room.description && <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 6px', lineHeight: 1.5 }}>{room.description}</p>}
-                    {room.location_name && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: T.textMuted, marginBottom: 4 }}>
-                        <MapPin size={12} /><span>{room.location_name}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {userId && room.user_id !== userId && (() => {
-                    const reqState = requestStates[room.id] ?? 'none';
-                    const isOpen = requestingId === room.id;
-                    return (
-                      <div style={{ borderTop: `1px solid ${T.border}`, padding: '10px 14px', background: T.surfaceAlt }}>
-                        {reqState === 'pending' || reqState === 'approved' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#15803D', fontWeight: 600 }}>
-                            <Check size={14} />
-                            {reqState === 'approved' ? 'Request approved!' : 'Request sent — awaiting approval'}
-                          </div>
-                        ) : isOpen ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <input
-                              value={requestMsg}
-                              onChange={e => setRequestMsg(e.target.value)}
-                              placeholder="Optional message to the host…"
-                              maxLength={120}
-                              style={{ width: '100%', height: 40, padding: '0 12px', fontSize: 13, fontFamily: 'inherit', border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.surface, color: T.text, outline: 'none', boxSizing: 'border-box' }}
-                            />
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button onClick={() => handleRequestJoin(room.id, room.name)}
-                                disabled={reqState === 'sending'}
-                                style={{ flex: 1, height: 36, borderRadius: 18, border: 'none', background: T.primary, color: T.bg, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                <Send size={13} /> {reqState === 'sending' ? 'Sending…' : 'Send Request'}
-                              </button>
-                              <button onClick={() => { setRequestingId(null); setRequestMsg(''); }}
-                                style={{ height: 36, padding: '0 14px', borderRadius: 18, border: `1.5px solid ${T.border}`, background: 'none', color: T.textMuted, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => { checkRequestStatus(room.id); setRequestingId(room.id); }}
-                            style={{ width: '100%', height: 36, borderRadius: 18, border: `1.5px solid ${T.primary}`, background: `${T.primary}12`, color: T.primary, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                            <Send size={13} /> Request to Join
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
+                <RoomCard
+                  key={room.id}
+                  room={room}
+                  userId={userId}
+                  outerTheme={T}
+                  reqState={requestStates[room.id] ?? 'none'}
+                  requestingId={requestingId}
+                  requestMsg={requestMsg}
+                  joinError={joinError[room.id]}
+                  onRequestMsg={setRequestMsg}
+                  onOpenRequest={() => { checkRequestStatus(room.id); setRequestingId(room.id); }}
+                  onSendRequest={() => handleRequestJoin(room.id, room.name)}
+                  onCancelRequest={() => { setRequestingId(null); setRequestMsg(''); setJoinError(prev => ({ ...prev, [room.id]: '' })); }}
+                />
               ))
             )}
           </div>

@@ -1,15 +1,36 @@
-import { X, MapPin, Star, ShieldCheck, Shield, ShieldAlert, UserPlus, UserCheck, Clock, Check, UserX } from 'lucide-react';
+import { useState } from 'react';
+import { X, MapPin, Star, ShieldCheck, Shield, ShieldAlert, UserPlus, UserCheck, Clock, Check, UserX, Phone, Navigation, CreditCard } from 'lucide-react';
 import type { Theme, DiscoverProfile, ConnectionStatus, Connection } from '@/types';
 import { PRONOUNS, INTEREST_TAGS, OTHERS_PALETTE, tagStyle, getDefaultAvatar } from '@/components/app/tagConstants';
 
 // ── Badge helpers ───────────────────────────────────────────────────────────
 
+const VERIFY_STEPS = [
+  { key: 'profile',  label: 'Profile complete', Icon: ShieldCheck },
+  { key: 'phone',    label: 'Phone added',       Icon: Phone },
+  { key: 'location', label: 'Location pinned',   Icon: Navigation },
+  { key: 'id',       label: 'ID verified',        Icon: CreditCard },
+] as const;
+
+function getVerifyCount(p: DiscoverProfile) {
+  return (p.profile_completed ? 1 : 0) + (p.contact_phone ? 1 : 0) + (p.home_lat != null ? 1 : 0) + (p.id_verified ? 1 : 0);
+}
+
+function getVerifySteps(p: DiscoverProfile) {
+  return [
+    { ...VERIFY_STEPS[0], done: p.profile_completed },
+    { ...VERIFY_STEPS[1], done: !!p.contact_phone },
+    { ...VERIFY_STEPS[2], done: p.home_lat != null },
+    { ...VERIFY_STEPS[3], done: p.id_verified },
+  ];
+}
+
 function profileBadge(p: DiscoverProfile) {
-  const count = (p.profile_completed ? 1 : 0) + (p.contact_phone ? 1 : 0) + (p.home_lat != null ? 1 : 0);
-  if (count === 3) return { label: 'Fully verified', color: '#15803D', bg: '#DCFCE7', border: '#86EFAC', Icon: ShieldCheck };
-  if (count === 2) return { label: 'Trusted member', color: '#A16207', bg: '#FEF9C3', border: '#FDE047', Icon: Shield };
-  if (count === 1) return { label: 'Getting started', color: '#C2410C', bg: '#FFEDD5', border: '#FDBA74', Icon: ShieldAlert };
-  return { label: 'New member', color: '#6B7280', bg: '#F3F4F6', border: '#D1D5DB', Icon: ShieldAlert };
+  const count = getVerifyCount(p);
+  if (count === 4) return { label: 'Fully verified',    color: '#15803D', bg: '#DCFCE7', border: '#86EFAC', Icon: ShieldCheck };
+  if (count >= 2)  return { label: 'Partially verified', color: '#A16207', bg: '#FEF9C3', border: '#FDE047', Icon: Shield };
+  if (count === 1) return { label: 'Getting started',   color: '#C2410C', bg: '#FFEDD5', border: '#FDBA74', Icon: ShieldAlert };
+  return                  { label: 'Not yet verified',  color: '#6B7280', bg: '#F3F4F6', border: '#D1D5DB', Icon: ShieldAlert };
 }
 
 // ── Connect button ──────────────────────────────────────────────────────────
@@ -89,6 +110,8 @@ export default function ProfileViewModal({
   const BadgeIcon = badge.Icon;
   const tags = person.profile_tags ?? [];
   const ratingDisplay = person.kasama_rating != null ? person.kasama_rating.toFixed(1) : '—';
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const avatarSrc = person.avatar_url || getDefaultAvatar(person.gender, person.profile_tags);
 
   // Pronouns are the first matching pronoun tag
   const pronounTag = tags.find(t => PRONOUNS.some(p => p.label === t));
@@ -120,18 +143,88 @@ export default function ProfileViewModal({
 
         {/* ── Avatar + badge — between header and scroll so overflow: auto never clips it ── */}
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '0 22px', marginTop: -40, flexShrink: 0, position: 'relative', zIndex: 1 }}>
-          <div style={{ width: 80, height: 80, borderRadius: '50%', background: T.primary, border: `4px solid ${T.surface}`, boxShadow: `0 4px 16px rgba(0,0,0,0.25)`, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-            <span className="font-display" style={{ fontSize: 30, fontWeight: 800, color: T.bg, position: 'absolute' }}>
-              {(person.display_name ?? '?').charAt(0).toUpperCase()}
-            </span>
-            <img src={getDefaultAvatar(person.gender, person.profile_tags)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-          </div>
+          {/* Tappable avatar */}
+          <button
+            onClick={() => setLightboxOpen(true)}
+            title="View photo"
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+          >
+            <div style={{ width: 80, height: 80, borderRadius: '50%', background: T.primary, border: `4px solid ${T.surface}`, boxShadow: `0 4px 16px rgba(0,0,0,0.25)`, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+              <span className="font-display" style={{ fontSize: 30, fontWeight: 800, color: T.bg, position: 'absolute' }}>
+                {(person.display_name ?? '?').charAt(0).toUpperCase()}
+              </span>
+              <img
+                src={avatarSrc}
+                alt=""
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(person.gender, person.profile_tags); }}
+              />
+            </div>
+            {/* Small zoom hint */}
+            <div style={{
+              position: 'absolute', bottom: 2, right: 2,
+              width: 20, height: 20, borderRadius: '50%',
+              background: T.primary, border: `2px solid ${T.surface}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 10, color: '#fff',
+            }}>
+              🔍
+            </div>
+          </button>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, background: badge.bg, border: `1.5px solid ${badge.border}` }}>
             <BadgeIcon size={14} style={{ color: badge.color }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: badge.color }}>{badge.label}</span>
           </div>
         </div>
+
+        {/* ── Photo lightbox ── */}
+        {lightboxOpen && (
+          <div
+            onClick={() => setLightboxOpen(false)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: 'rgba(0,0,0,0.88)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 24,
+              cursor: 'zoom-out',
+            }}
+          >
+            <button
+              onClick={() => setLightboxOpen(false)}
+              style={{
+                position: 'absolute', top: 20, right: 20,
+                width: 36, height: 36, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.15)', border: 'none',
+                color: '#fff', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <X size={18} />
+            </button>
+            <img
+              src={avatarSrc}
+              alt={person.display_name ?? ''}
+              onClick={e => e.stopPropagation()}
+              style={{
+                maxWidth: '90vw', maxHeight: '80vh',
+                borderRadius: 20,
+                boxShadow: '0 32px 80px rgba(0,0,0,0.6)',
+                objectFit: 'contain',
+                cursor: 'default',
+              }}
+              onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(person.gender, person.profile_tags); }}
+            />
+            <p style={{
+              position: 'absolute', bottom: 24, left: 0, right: 0,
+              textAlign: 'center', fontSize: 13, fontWeight: 600,
+              color: 'rgba(255,255,255,0.6)',
+              fontFamily: '"DM Sans",system-ui,sans-serif',
+            }}>
+              {person.display_name}
+            </p>
+          </div>
+        )}
 
         {/* ── Scrollable body ── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 22px 22px' }}>
@@ -190,6 +283,7 @@ export default function ProfileViewModal({
 
           {/* Stats row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18 }}>
+            {/* Kasama rating */}
             <div style={{ padding: '14px 12px', background: T.surfaceAlt, borderRadius: 14, textAlign: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: 3 }}>
                 <Star size={14} style={{ color: '#D97706', fill: '#D97706' }} />
@@ -199,14 +293,26 @@ export default function ProfileViewModal({
                 Kasama rating{person.rating_count > 0 ? ` · ${person.rating_count} reviews` : ''}
               </p>
             </div>
-            <div style={{ padding: '14px 12px', background: badge.bg, border: `1.5px solid ${badge.border}`, borderRadius: 14, textAlign: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 3 }}>
-                <BadgeIcon size={16} style={{ color: badge.color }} />
-                <p className="font-display" style={{ fontSize: 16, fontWeight: 800, color: badge.color, margin: 0 }}>
-                  {person.profile_completed ? 'Verified' : 'New'}
-                </p>
+
+            {/* Verification checklist */}
+            <div style={{ padding: '12px 14px', background: badge.bg, border: `1.5px solid ${badge.border}`, borderRadius: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+                <BadgeIcon size={13} style={{ color: badge.color }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: badge.color }}>{badge.label}</span>
               </div>
-              <p style={{ fontSize: 11, color: badge.color, margin: 0, opacity: 0.8 }}>{badge.label}</p>
+              {getVerifySteps(person).map(step => (
+                <div key={step.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, marginBottom: 5, color: step.done ? badge.color : '#9CA3AF' }}>
+                  <div style={{
+                    width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                    background: step.done ? badge.color : 'transparent',
+                    border: `1.5px solid ${step.done ? badge.color : '#D1D5DB'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {step.done && <Check size={9} color="#fff" strokeWidth={3} />}
+                  </div>
+                  {step.label}
+                </div>
+              ))}
             </div>
           </div>
 
