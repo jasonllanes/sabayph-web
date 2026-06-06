@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Users, Plus, Edit2, Trash2, Loader, Copy, Share2, Check, Lock, MapPin, ChevronDown, ChevronUp, UserCheck, UserX, Bell, ShoppingBasket, HeartHandshake, Eye, X, Star, ShieldCheck, Shield, ShieldAlert } from 'lucide-react';
+import ShareRoomCard from '@/components/app/ShareRoomCard';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import { useRooms } from '@/hooks/useRooms';
 import { useRoomJoinRequests } from '@/hooks/useJoinRequests';
 import RoomWizard, { type WizardData } from '@/components/app/RoomWizard';
 import PasaBuyWizard, { type PasaBuyWizardData } from '@/components/app/PasaBuyWizard';
+import { SwipeToConfirm } from '@/components/app/BookingModals';
 import { THEMES } from '@/data/themes';
 import { supabase } from '@/lib/supabase';
 import type { Theme, Room, DiscoverProfile } from '@/types';
@@ -34,7 +36,8 @@ function ApplicantProfileModal({ profile, theme: T, onClose }: { profile: Discov
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={e => { if (e.target === e.currentTarget) (e.currentTarget as HTMLDivElement).dataset.dismissing = '1'; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && (e.currentTarget as HTMLDivElement).dataset.dismissing === '1') onClose(); (e.currentTarget as HTMLDivElement).dataset.dismissing = ''; }}
     >
       <div style={{ width: '100%', maxWidth: 380, background: T.surface, borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.4)', overflow: 'hidden' }}>
         {/* Banner */}
@@ -126,6 +129,25 @@ function formatEventDate(iso: string): string {
   return new Date(iso).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
 }
 
+type RoomViewState = 'active' | 'queuing' | 'finished' | 'archived';
+
+function getRoomViewState(r: Room, now: Date): RoomViewState {
+  if (r.status === 'completed') return 'finished';
+  if (r.status === 'cancelled') return 'archived';
+  if (r.event_date && new Date(r.event_date) < now && r.status !== 'confirmed') return 'archived';
+  const isFull = r.member_count >= r.max_members;
+  if (r.status === 'confirmed') return 'active';
+  if ((r.category === 'gaming' || r.category === 'cafe') && isFull) return 'active';
+  return 'queuing';
+}
+
+const ROOM_STATE_META: Record<RoomViewState, { label: string; emoji: string }> = {
+  active:   { label: 'Active',   emoji: '🟢' },
+  queuing:  { label: 'Queuing',  emoji: '🟡' },
+  finished: { label: 'Finished', emoji: '✅' },
+  archived: { label: 'Archived', emoji: '📦' },
+};
+
 export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
   const [categoryTab, setCategoryTab] = useState<RoomCategory>('rotary');
   const { rooms, loading, error, createRoom, updateRoom, deleteRoom } = useRooms(categoryTab, userId);
@@ -134,8 +156,12 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [roomsView, setRoomsView] = useState<'active' | 'archived'>('active');
+  const [roomsView, setRoomsView] = useState<RoomViewState>('active');
   const [requestsExpandedId, setRequestsExpandedId] = useState<string | null>(null);
+  const [pasabuyDetailId, setPasabuyDetailId] = useState<string | null>(null);
+  const [togglingAutoMatch, setTogglingAutoMatch] = useState(false);
+  const [roomDetailId, setRoomDetailId] = useState<string | null>(null);
+  const [shareRoomId, setShareRoomId] = useState<string | null>(null);
 
   const pasabuyTheme = THEMES.pasabuy;
   const gamingTheme = { ...T, primary: '#7C3AED', accent: '#A855F7', bg: T.bg };
@@ -157,10 +183,12 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
   };
 
   const now = new Date();
-  // Confirmed rooms are always "active" — they're ongoing deliveries
-  const activeRooms   = rooms.filter(r => r.status === 'confirmed' || (!!r.event_date && new Date(r.event_date) >= now));
-  const archivedRooms = rooms.filter(r => r.status !== 'confirmed' && (!r.event_date  || new Date(r.event_date) <  now));
-  const displayRooms  = roomsView === 'active' ? activeRooms : archivedRooms;
+  const stateMap = rooms.reduce<Record<RoomViewState, Room[]>>(
+    (acc, r) => { acc[getRoomViewState(r, now)].push(r); return acc; },
+    { active: [], queuing: [], finished: [], archived: [] }
+  );
+  const activeRooms  = stateMap.active; // kept for banner / new-room gate
+  const displayRooms = stateMap[roomsView];
 
   const openCreate = () => { setEditing(null); setWizardOpen(true); };
   const openEdit   = (room: Room) => { setEditing(room); setWizardOpen(true); };
@@ -311,12 +339,6 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
     setCopiedId(room.id + '-code');
     setTimeout(() => setCopiedId(null), 2000);
   };
-  const shareLink = (room: Room) => {
-    const url = `${window.location.origin}${window.location.pathname}?join=${room.join_code}`;
-    navigator.clipboard.writeText(url);
-    setCopiedId(room.id + '-link');
-    setTimeout(() => setCopiedId(null), 2000);
-  };
 
   const TT = activeTheme;
 
@@ -374,19 +396,22 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
         </div>
       )}
 
-      {/* Active / Archived tabs */}
+      {/* Active / Queuing / Finished / Archived tabs */}
       {!loading && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          {(['active', 'archived'] as const).map(tab => (
-            <button key={tab} onClick={() => setRoomsView(tab)}
-              style={{ flex: 1, height: 40, borderRadius: 20, border: `2px solid ${roomsView === tab ? TT.primary : TT.border}`, background: roomsView === tab ? TT.primary : TT.surface, color: roomsView === tab ? TT.bg : TT.textMuted, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, transition: 'all 200ms ease' }}>
-              {tab === 'active' ? '🟢' : '📦'}
-              {tab === 'active' ? 'Active' : 'Archived'}
-              <span style={{ fontSize: 11, padding: '1px 7px', borderRadius: 12, background: roomsView === tab ? `rgba(255,255,255,0.25)` : TT.surfaceAlt, color: roomsView === tab ? TT.bg : TT.textMuted }}>
-                {tab === 'active' ? activeRooms.length : archivedRooms.length}
-              </span>
-            </button>
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 7, marginBottom: 20 }}>
+          {(['active', 'queuing', 'finished', 'archived'] as RoomViewState[]).map(tab => {
+            const m = ROOM_STATE_META[tab];
+            const sel = roomsView === tab;
+            const count = stateMap[tab].length;
+            return (
+              <button key={tab} onClick={() => setRoomsView(tab)}
+                style={{ height: 52, borderRadius: 16, border: `2px solid ${sel ? TT.primary : TT.border}`, background: sel ? TT.primary : TT.surface, color: sel ? TT.bg : TT.textMuted, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, transition: 'all 200ms ease', padding: 0 }}>
+                <span style={{ fontSize: 15, lineHeight: 1 }}>{m.emoji}</span>
+                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.2, lineHeight: 1 }}>{m.label}</span>
+                <span style={{ fontSize: 10, minWidth: 18, textAlign: 'center', padding: '0 5px', borderRadius: 10, background: sel ? 'rgba(255,255,255,0.22)' : TT.surfaceAlt, color: sel ? TT.bg : TT.textMuted, fontWeight: 700, lineHeight: '16px' }}>{count}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -404,20 +429,12 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
           {displayRooms.map(room => {
             const isOwner = room.user_id === userId;
-            const isArchived = !room.event_date || new Date(room.event_date) < now;
-            const isExpanded = expandedId === room.id;
+            const isArchived = room.status === 'completed' || room.status === 'cancelled' || !room.event_date || new Date(room.event_date) < now;
             const fill = Math.min((room.member_count / room.max_members) * 100, 100);
             const eventDisplay = room.event_date ? formatEventDate(room.event_date) : room.next_event;
-            const hasItinerary = room.itinerary && room.itinerary.length > 0 && categoryTab !== 'pasabuy';
             const isPasaBuy = categoryTab === 'pasabuy';
             const isGaming  = categoryTab === 'gaming';
             const isCafe    = categoryTab === 'cafe';
-            const allSocials = [
-              room.facebook_url && { Icon: FacebookIcon, url: room.facebook_url, color: '#1877F2' },
-              room.instagram_url && { Icon: InstagramIcon, url: room.instagram_url, color: '#E4405F' },
-              room.twitter_url && { Icon: TwitterIcon, url: room.twitter_url, color: '#1DA1F2' },
-              ...(room.other_socials ?? []).filter(s => s.url).map(s => ({ Icon: null, url: s.url, label: s.label, color: TT.primary })),
-            ].filter(Boolean);
 
             return (
               <div key={room.id}
@@ -425,107 +442,83 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
                 onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 4px 16px ${TT.text}18`)}
                 onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
               >
-                <div style={{ padding: 16 }}>
-                  {/* Badges */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                    {isPasaBuy
-                      ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#FEF3E2', color: '#D97706', padding: '3px 10px', borderRadius: 20, border: '1px solid #F9C07E' }}><ShoppingBasket size={11} /> PasaBuy</span>
-                      : isGaming
+                {isPasaBuy ? (
+                  /* Compact PasaBuy card — tap to open detail sheet */
+                  <div
+                    onClick={() => setPasabuyDetailId(room.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setPasabuyDetailId(room.id); }}
+                    style={{ padding: '14px 16px', cursor: 'pointer' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#FEF3E2', color: '#D97706', padding: '3px 10px', borderRadius: 20, border: '1px solid #F9C07E' }}><ShoppingBasket size={11} /> PasaBuy</span>
+                      {isArchived && <span style={{ fontSize: 10, fontWeight: 700, background: TT.border, color: TT.textMuted, padding: '2px 8px', borderRadius: 8 }}>📦 ARCHIVED</span>}
+                      {room.status === 'confirmed' && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
+                      {(() => { const cnt = requests.filter(r => r.room_id === room.id).length; return cnt > 0 && room.status !== 'confirmed' ? <span style={{ fontSize: 10, fontWeight: 700, background: TT.accent, color: '#fff', padding: '2px 8px', borderRadius: 8 }}>🔔 {cnt} applicant{cnt !== 1 ? 's' : ''}</span> : null; })()}
+                      {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: TT.surfaceAlt, color: TT.textMuted, padding: '2px 8px', borderRadius: 8, border: `1px solid ${TT.border}` }}><Lock size={9} /> PRIVATE</span>}
+                      {isOwner && <span style={{ fontSize: 10, fontWeight: 700, background: TT.primary, color: TT.bg, padding: '2px 8px', borderRadius: 8, marginLeft: 'auto' }}>YOUR REQUEST</span>}
+                    </div>
+                    <h3 className="font-display" style={{ fontSize: 16, fontWeight: 800, color: TT.text, margin: '0 0 8px' }}>{room.name}</h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                      {room.location_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>🏪 {room.location_name}</span>}
+                      {(room.items ?? []).length > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>🛒 {room.items.length} item{room.items.length !== 1 ? 's' : ''}</span>}
+                      {eventDisplay && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>🤝 {eventDisplay}</span>}
+                    </div>
+                    {room.status !== 'confirmed' && (
+                      <div style={{ marginBottom: 10 }}>
+                        <span style={{ fontSize: 11, color: TT.textMuted }}><Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{room.member_count} / {room.max_members} applicants in queue</span>
+                        <div style={{ height: 4, background: TT.surfaceAlt, borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
+                          <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: TT.primary }} />
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.primary, fontWeight: 600, marginTop: 2 }}>
+                      <Eye size={12} /> View details <ChevronDown size={12} />
+                    </div>
+                  </div>
+                ) : (
+                  /* Compact non-PasaBuy card — tap to open detail dialog */
+                  <div
+                    onClick={() => setRoomDetailId(room.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setRoomDetailId(room.id); }}
+                    style={{ padding: '14px 16px', cursor: 'pointer' }}
+                  >
+                    {/* Badges */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                      {isGaming
                         ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#EDE9FE', color: '#7C3AED', padding: '3px 10px', borderRadius: 20, border: '1px solid #C4B5FD' }}><img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/gaming.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Gaming</span>
                         : isCafe
                           ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#92400E', padding: '3px 10px', borderRadius: 20, border: '1px solid #D97706AA' }}><img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/coffee.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Cafe</span>
                           : <span style={{ fontSize: 11, fontWeight: 700, background: '#F4ECDF', color: '#9F5E0F', padding: '3px 10px', borderRadius: 20, border: '1px solid #9F5E0F44' }}>Rotary</span>
-                    }
-                    {isArchived && <span style={{ fontSize: 10, fontWeight: 700, background: TT.border, color: TT.textMuted, padding: '2px 8px', borderRadius: 8 }}>📦 ARCHIVED</span>}
-                    {room.status === 'confirmed' && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
-                    {!isArchived && room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
-                    {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: TT.surfaceAlt, color: TT.textMuted, padding: '2px 8px', borderRadius: 8, border: `1px solid ${TT.border}` }}><Lock size={9} /> PRIVATE</span>}
-                    {isOwner && <span style={{ fontSize: 10, fontWeight: 700, background: TT.primary, color: TT.bg, padding: '2px 8px', borderRadius: 8, marginLeft: 'auto' }}>YOUR {isPasaBuy ? 'REQUEST' : isGaming ? 'LOBBY' : isCafe ? 'HANGOUT' : 'ROOM'}</span>}
-                  </div>
+                      }
+                      {isArchived && <span style={{ fontSize: 10, fontWeight: 700, background: TT.border, color: TT.textMuted, padding: '2px 8px', borderRadius: 8 }}>📦 ARCHIVED</span>}
+                      {room.status === 'confirmed' && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
+                      {!isArchived && room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
+                      {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: TT.surfaceAlt, color: TT.textMuted, padding: '2px 8px', borderRadius: 8, border: `1px solid ${TT.border}` }}><Lock size={9} /> PRIVATE</span>}
+                      {isOwner && (() => { const cnt = requests.filter(r => r.room_id === room.id).length; return cnt > 0 && room.status !== 'confirmed' ? <span style={{ fontSize: 10, fontWeight: 700, background: TT.accent, color: '#fff', padding: '2px 8px', borderRadius: 8 }}>🔔 {cnt} request{cnt !== 1 ? 's' : ''}</span> : null; })()}
+                      {isOwner && <span style={{ fontSize: 10, fontWeight: 700, background: TT.primary, color: TT.bg, padding: '2px 8px', borderRadius: 8, marginLeft: 'auto' }}>YOUR {isGaming ? 'LOBBY' : isCafe ? 'HANGOUT' : 'ROOM'}</span>}
+                    </div>
 
-                  <h3 className="font-display" style={{ fontSize: 16, fontWeight: 800, color: TT.text, margin: '0 0 4px' }}>{room.name}</h3>
-                  {room.description && (
-                    <pre style={{ fontSize: 12, color: TT.textMuted, margin: '0 0 8px', lineHeight: 1.5, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{room.description}</pre>
-                  )}
-                  <p style={{ fontSize: 12, color: TT.textMuted, margin: '0 0 10px' }}>
-                    {isPasaBuy ? 'Requested by' : 'Hosted by'} <strong style={{ color: TT.text }}>{room.host_name}</strong>
-                  </p>
-
-                  {/* Members / agents */}
-                  <div style={{ marginBottom: 10 }}>
-                    <span style={{ fontSize: 11, color: TT.textMuted }}>
-                      <Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />
-                      {room.member_count} / {room.max_members} {isPasaBuy ? 'agents' : isGaming ? 'players' : isCafe ? 'guests' : 'members'}
-                    </span>
-                    <div style={{ height: 5, background: TT.surfaceAlt, borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
-                      <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: TT.primary, transition: 'width 600ms' }} />
+                    <h3 className="font-display" style={{ fontSize: 16, fontWeight: 800, color: TT.text, margin: '0 0 8px' }}>{room.name}</h3>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                      {isGaming && room.game_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>🎮 {room.game_name}</span>}
+                      {room.location_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>📍 {room.location_name}</span>}
+                      {eventDisplay && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>📅 {eventDisplay}</span>}
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      <span style={{ fontSize: 11, color: TT.textMuted }}><Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{room.member_count} / {room.max_members} {isGaming ? 'players' : isCafe ? 'guests' : 'members'}</span>
+                      <div style={{ height: 4, background: TT.surfaceAlt, borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
+                        <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: TT.primary }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.primary, fontWeight: 600, marginTop: 2 }}>
+                      <Eye size={12} /> View details <ChevronDown size={12} />
                     </div>
                   </div>
-
-                  {/* Event & Location */}
-                  {(eventDisplay || room.location_name) && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
-                      {eventDisplay && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 10, background: TT.surfaceAlt }}>
-                          <span style={{ fontSize: 13 }}>{isPasaBuy ? '🤝' : '📅'}</span>
-                          <p style={{ fontSize: 12, color: TT.text, margin: 0, fontWeight: 600, flex: 1 }}>
-                            {isPasaBuy ? 'Meetup: ' : ''}{eventDisplay}
-                          </p>
-                        </div>
-                      )}
-                      {room.location_name && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 10, background: TT.surfaceAlt }}>
-                          <MapPin size={13} style={{ color: TT.primary, flexShrink: 0 }} />
-                          <p style={{ fontSize: 12, color: TT.text, margin: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{room.location_name}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Social links */}
-                  {allSocials.length > 0 && (
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                      {allSocials.map((s, i) => s && (
-                        s.Icon
-                          ? <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 8, background: `${s.color}18`, border: `1px solid ${s.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
-                              <s.Icon size={15} color={s.color} />
-                            </a>
-                          : <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ padding: '4px 10px', borderRadius: 8, background: `${TT.primary}12`, border: `1px solid ${TT.primary}33`, display: 'flex', alignItems: 'center', fontSize: 11, fontWeight: 600, color: TT.primary, textDecoration: 'none', gap: 4 }}>
-                              🔗 {(s as { label?: string }).label || 'Link'}
-                            </a>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Itinerary (Rotary only) */}
-                  {hasItinerary && (
-                    <div style={{ borderTop: `1px solid ${TT.border}`, paddingTop: 12 }}>
-                      <button
-                        onClick={() => setExpandedId(isExpanded ? null : room.id)}
-                        style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 0, fontFamily: 'inherit' }}
-                      >
-                        <span style={{ fontSize: 12, fontWeight: 700, color: TT.primary }}>📋 Itinerary ({room.itinerary.length} steps)</span>
-                        {isExpanded ? <ChevronUp size={14} style={{ color: TT.textMuted }} /> : <ChevronDown size={14} style={{ color: TT.textMuted }} />}
-                      </button>
-                      {isExpanded && (
-                        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {room.itinerary.map((item, idx) => (
-                            <div key={item.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: `${TT.primary}18`, border: `1.5px solid ${TT.primary}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: TT.primary, flexShrink: 0 }}>{idx + 1}</div>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  {item.time && <span style={{ fontSize: 11, color: TT.textMuted, fontWeight: 600 }}>{item.time}</span>}
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: TT.text }}>{item.title}</span>
-                                </div>
-                                {item.description && <p style={{ fontSize: 12, color: TT.textMuted, margin: '2px 0 0', lineHeight: 1.4 }}>{item.description}</p>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                )}
 
                 {/* Join code strip */}
                 <div style={{ borderTop: `1px solid ${TT.border}`, padding: '10px 16px', background: TT.surfaceAlt, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -537,14 +530,21 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
                     <button onClick={() => copyCode(room)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${TT.border}`, background: TT.surface, color: TT.text, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
                       {copiedId === room.id + '-code' ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Code</>}
                     </button>
-                    <button onClick={() => shareLink(room)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${TT.primary}44`, background: `${TT.primary}12`, color: TT.primary, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
-                      {copiedId === room.id + '-link' ? <><Check size={12} /> Copied!</> : <><Share2 size={12} /> Share Link</>}
+                    <button onClick={() => setShareRoomId(room.id)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${TT.primary}44`, background: `${TT.primary}12`, color: TT.primary, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
+                      <Share2 size={12} /> Share Card
                     </button>
                   </div>
                 </div>
 
-                {/* Join Requests panel — owners only */}
+                {/* Join Requests panel — owners only; PasaBuy agents are managed in the detail dialog */}
                 {isOwner && (() => {
+                  if (isPasaBuy) {
+                    return room.status === 'confirmed' ? (
+                      <div style={{ borderTop: `1px solid ${TT.border}`, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 13, color: '#15803D', fontWeight: 600 }}>✅ Booking confirmed — group chat created in Messages.</span>
+                      </div>
+                    ) : null;
+                  }
                   const roomRequests = requests.filter(r => r.room_id === room.id);
                   const isReqExpanded = requestsExpandedId === room.id;
                   const isConfirmed = room.status === 'confirmed';
@@ -563,7 +563,7 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <Bell size={14} style={{ color: roomRequests.length > 0 ? TT.accent : TT.textMuted }} />
                               <span style={{ fontSize: 13, fontWeight: 600, color: roomRequests.length > 0 ? TT.text : TT.textMuted }}>
-                                {isPasaBuy ? 'Buyer Applications' : isGaming ? 'Player Requests' : isCafe ? 'Guest Requests' : 'Join Requests'}
+                                {isGaming ? 'Player Requests' : isCafe ? 'Guest Requests' : 'Join Requests'}
                               </span>
                               {roomRequests.length > 0 && (
                                 <span style={{ fontSize: 11, fontWeight: 700, background: TT.accent, color: '#fff', padding: '1px 7px', borderRadius: 10 }}>{roomRequests.length}</span>
@@ -575,7 +575,7 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
                           {isReqExpanded && (
                             <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                               {roomRequests.length === 0 ? (
-                                <p style={{ fontSize: 13, color: TT.textMuted, margin: 0, textAlign: 'center', padding: '12px 0' }}>No pending {isPasaBuy ? 'applications' : isGaming ? 'player requests' : isCafe ? 'guest requests' : 'requests'}.</p>
+                                <p style={{ fontSize: 13, color: TT.textMuted, margin: 0, textAlign: 'center', padding: '12px 0' }}>No pending {isGaming ? 'player requests' : isCafe ? 'guest requests' : 'requests'}.</p>
                               ) : (
                                 roomRequests.map(req => (
                                   <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: TT.surfaceAlt, borderRadius: 12, border: `1.5px solid ${TT.border}` }}>
@@ -627,13 +627,27 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
 
                 {/* Owner actions */}
                 {isOwner && !isArchived && (
-                  <div style={{ borderTop: `1px solid ${TT.border}`, padding: '10px 16px', display: 'flex', gap: 8 }}>
-                    <button onClick={() => openEdit(room)} style={{ flex: 1, height: 36, borderRadius: 10, border: `1.5px solid ${TT.border}`, background: TT.surfaceAlt, color: TT.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                      <Edit2 size={13} /> Edit
-                    </button>
-                    <button onClick={() => handleDelete(room)} disabled={!!deletingId} style={{ flex: 1, height: 36, borderRadius: 10, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                      <Trash2 size={13} /> Delete
-                    </button>
+                  <div style={{ borderTop: `1px solid ${TT.border}`, padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* End Room swipe — only for non-PasaBuy rooms */}
+                    {categoryTab !== 'pasabuy' && (
+                      <SwipeToConfirm
+                        label="Slide to end room"
+                        sublabel="Only you as the host can end this room"
+                        color={TT.primary}
+                        onConfirm={async () => {
+                          await updateRoom(room.id, { status: 'completed' } as any);
+                          setExpandedId(null);
+                        }}
+                      />
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => openEdit(room)} style={{ flex: 1, height: 36, borderRadius: 10, border: `1.5px solid ${TT.border}`, background: TT.surfaceAlt, color: TT.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <Edit2 size={13} /> Edit
+                      </button>
+                      <button onClick={() => handleDelete(room)} disabled={!!deletingId} style={{ flex: 1, height: 36, borderRadius: 10, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <Trash2 size={13} /> Delete
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -645,25 +659,19 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
       {!loading && displayRooms.length === 0 && !error && (
         <div style={{ textAlign: 'center', padding: '40px 20px', border: `2px dashed ${TT.border}`, borderRadius: 20 }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>
-            {categoryTab === 'pasabuy' ? '🛒' : categoryTab === 'gaming' ? (roomsView === 'archived' ? '📦' : '🎮') : categoryTab === 'cafe' ? (roomsView === 'archived' ? '📦' : '☕') : roomsView === 'archived' ? '📦' : '🏛️'}
+            {ROOM_STATE_META[roomsView].emoji}
           </div>
           <p className="font-display" style={{ fontSize: 17, fontWeight: 700, color: TT.text, margin: '0 0 6px' }}>
-            {categoryTab === 'pasabuy'
-              ? roomsView === 'archived' ? 'No archived requests yet.' : 'No active PasaBuy requests.'
-              : categoryTab === 'gaming'
-                ? roomsView === 'archived' ? 'No archived lobbies yet.' : 'No active gaming lobbies.'
-                : categoryTab === 'cafe'
-                  ? roomsView === 'archived' ? 'No archived hangouts yet.' : 'No active cafe hangouts.'
-                  : roomsView === 'archived' ? 'No archived rooms yet.' : 'No active rooms yet.'}
+            {roomsView === 'active'   && (categoryTab === 'pasabuy' ? 'No active requests.' : categoryTab === 'gaming' ? 'No active lobbies.' : categoryTab === 'cafe' ? 'No active hangouts.' : 'No active rooms yet.')}
+            {roomsView === 'queuing'  && (categoryTab === 'pasabuy' ? 'No requests in queue.' : categoryTab === 'gaming' ? 'No lobbies waiting.' : categoryTab === 'cafe' ? 'No hangouts in queue.' : 'No rooms in queue.')}
+            {roomsView === 'finished' && (categoryTab === 'pasabuy' ? 'No finished requests.' : categoryTab === 'gaming' ? 'No finished lobbies.' : categoryTab === 'cafe' ? 'No finished hangouts.' : 'No finished rooms.')}
+            {roomsView === 'archived' && (categoryTab === 'pasabuy' ? 'No archived requests.' : categoryTab === 'gaming' ? 'No archived lobbies.' : categoryTab === 'cafe' ? 'No archived hangouts.' : 'No archived rooms.')}
           </p>
           <p style={{ fontSize: 13, color: TT.textMuted, margin: '0 0 20px' }}>
-            {categoryTab === 'pasabuy'
-              ? roomsView === 'archived' ? 'Past requests appear here.' : 'Post your first PasaBuy request!'
-              : categoryTab === 'gaming'
-                ? roomsView === 'archived' ? 'Past lobbies appear here.' : 'Create a lobby and rally your gaming kasamas!'
-                : categoryTab === 'cafe'
-                  ? roomsView === 'archived' ? 'Past hangouts appear here.' : 'Set up a cafe hangout and invite your kasamas!'
-                  : roomsView === 'archived' ? 'Rooms with past event dates appear here.' : 'Be the first to create a room for your chapter!'}
+            {roomsView === 'active'   && (categoryTab === 'pasabuy' ? 'Accepted requests appear here.' : 'Confirmed or full rooms appear here.')}
+            {roomsView === 'queuing'  && (categoryTab === 'pasabuy' ? 'Requests awaiting an agent appear here.' : 'Rooms still waiting for members or host confirmation appear here.')}
+            {roomsView === 'finished' && 'Completed rooms and deliveries appear here.'}
+            {roomsView === 'archived' && 'Cancelled rooms and past event dates appear here.'}
           </p>
           {roomsView === 'active' && (
             <button onClick={openCreate} style={{ padding: '10px 24px', borderRadius: 24, border: 'none', background: TT.primary, color: TT.bg, fontFamily: 'inherit', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -683,11 +691,383 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
         </div>
       </div>
 
+      {/* PasaBuy Detail Bottom Sheet */}
+      {pasabuyDetailId && (() => {
+        const detailRoom = rooms.find(r => r.id === pasabuyDetailId);
+        if (!detailRoom) return null;
+        const PT = THEMES.pasabuy;
+        const roomRequests = requests.filter(r => r.room_id === detailRoom.id);
+        const isConfirmed = detailRoom.status === 'confirmed';
+        const isOwnerOfDetail = detailRoom.user_id === userId;
+        const isAutoMatch = detailRoom.approval_mode === 'auto';
+        const isArchivedDetail = !detailRoom.event_date || new Date(detailRoom.event_date) < now;
+        const detailEventDisplay = detailRoom.event_date ? formatEventDate(detailRoom.event_date) : detailRoom.next_event;
+
+        return (
+          <div
+            onMouseDown={e => { if (e.target === e.currentTarget) (e.currentTarget as HTMLDivElement).dataset.dismissing = '1'; }}
+            onMouseUp={e => { if (e.target === e.currentTarget && (e.currentTarget as HTMLDivElement).dataset.dismissing === '1') setPasabuyDetailId(null); (e.currentTarget as HTMLDivElement).dataset.dismissing = ''; }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', fontFamily: '"DM Sans", system-ui, sans-serif' }}
+          >
+            <div style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', background: PT.surface, borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
+
+              {/* Header */}
+              <div style={{ padding: '8px 20px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p className="font-pixel" style={{ fontSize: 11, color: PT.accent, margin: '0 0 2px', letterSpacing: 1 }}>PASABUY REQUEST</p>
+                  <h2 className="font-display" style={{ fontSize: 20, fontWeight: 800, color: PT.text, margin: '0 0 6px', lineHeight: 1.2 }}>{detailRoom.name}</h2>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {isConfirmed && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
+                    {detailRoom.is_private && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: PT.surfaceAlt, color: PT.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} /> PRIVATE</span>}
+                    {isOwnerOfDetail && <span style={{ fontSize: 10, fontWeight: 700, background: PT.primary, color: PT.bg, padding: '2px 8px', borderRadius: 8 }}>YOUR REQUEST</span>}
+                    {isAutoMatch && !isConfirmed && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8 }}>⚡ AUTO-MATCH ON</span>}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPasabuyDetailId(null)}
+                  style={{ width: 36, height: 36, borderRadius: '50%', background: PT.surfaceAlt, border: `1.5px solid ${PT.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: PT.textMuted, flexShrink: 0 }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Requested by */}
+              <p style={{ padding: '10px 20px 0', fontSize: 13, color: PT.textMuted, margin: 0 }}>
+                Requested by <strong style={{ color: PT.text }}>{detailRoom.host_name}</strong>
+              </p>
+
+              {/* Quick chips */}
+              {(detailEventDisplay || detailRoom.location_name) && (
+                <div style={{ padding: '10px 20px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {detailEventDisplay && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: PT.surfaceAlt, border: `1px solid ${PT.border}` }}>
+                      <span style={{ fontSize: 14 }}>🤝</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: PT.text }}>{detailEventDisplay}</span>
+                    </div>
+                  )}
+                  {detailRoom.location_name && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: PT.surfaceAlt, border: `1px solid ${PT.border}` }}>
+                      <MapPin size={13} style={{ color: PT.primary, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: PT.text }}>{detailRoom.location_name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Full details (description) */}
+              {detailRoom.description && (
+                <div style={{ margin: '14px 20px 0', padding: '14px', background: PT.surfaceAlt, borderRadius: 16, border: `1px solid ${PT.border}` }}>
+                  <pre style={{ fontSize: 13, color: PT.text, margin: 0, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{detailRoom.description}</pre>
+                </div>
+              )}
+
+              {/* Confirmed message */}
+              {isConfirmed && (
+                <div style={{ margin: '14px 20px 0', padding: '14px 16px', background: '#DCFCE7', borderRadius: 14, border: '1.5px solid #86EFAC', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 20 }}>✅</span>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: '#15803D', margin: 0 }}>Booking confirmed — your agent has been selected. Group chat created in Messages.</p>
+                </div>
+              )}
+
+              {/* Agent Queue — owner only, not yet confirmed */}
+              {isOwnerOfDetail && !isConfirmed && (
+                <div style={{ margin: '14px 20px 0', borderRadius: 16, border: `2px solid ${PT.border}`, overflow: 'hidden' }}>
+                  {/* Queue header */}
+                  <div style={{ padding: '14px 16px', background: PT.surfaceAlt, borderBottom: `1px solid ${PT.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <Bell size={15} style={{ color: PT.accent }} />
+                      <span style={{ fontSize: 14, fontWeight: 700, color: PT.text }}>Agent Queue</span>
+                      {roomRequests.length > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, background: PT.accent, color: '#fff', padding: '1px 7px', borderRadius: 10 }}>{roomRequests.length}</span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: 12, color: PT.textMuted, margin: '0 0 12px', lineHeight: 1.5 }}>
+                      Pick any applicant — you don't need all {detailRoom.max_members} slots filled. Select one and the booking is confirmed.
+                    </p>
+
+                    {/* Auto-match toggle — only shown for active (non-archived) rooms */}
+                    {!isArchivedDetail && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: isAutoMatch ? '#F0FDF4' : PT.surface, borderRadius: 12, border: `1.5px solid ${isAutoMatch ? '#86EFAC' : PT.border}` }}>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: isAutoMatch ? '#15803D' : PT.text, margin: '0 0 1px' }}>Auto-match</p>
+                        <p style={{ fontSize: 11, color: isAutoMatch ? '#16A34A' : PT.textMuted, margin: 0 }}>
+                          {isAutoMatch ? 'First applicant gets confirmed automatically' : 'Manually choose your agent'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (togglingAutoMatch) return;
+                          setTogglingAutoMatch(true);
+                          const newMode = isAutoMatch ? 'manual' : 'auto';
+                          await handlePasaBuyUpdate(detailRoom.id, { approval_mode: newMode } as any);
+                          if (newMode === 'auto' && roomRequests.length > 0) {
+                            await approveRequest(roomRequests[0]);
+                            setPasabuyDetailId(null);
+                          }
+                          setTogglingAutoMatch(false);
+                        }}
+                        disabled={togglingAutoMatch}
+                        style={{ width: 48, height: 26, borderRadius: 13, border: 'none', background: isAutoMatch ? '#15803D' : PT.border, cursor: togglingAutoMatch ? 'not-allowed' : 'pointer', position: 'relative', transition: 'background 250ms', flexShrink: 0, opacity: togglingAutoMatch ? 0.6 : 1 }}
+                      >
+                        <div style={{ position: 'absolute', top: 3, left: isAutoMatch ? 25 : 3, width: 20, height: 20, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.25)', transition: 'left 250ms' }} />
+                      </button>
+                    </div>}
+                  </div>
+
+                  {/* Applicants list */}
+                  <div style={{ padding: '10px 16px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {roomRequests.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                        <p style={{ fontSize: 24, margin: '0 0 8px' }}>🕐</p>
+                        <p style={{ fontSize: 13, color: PT.textMuted, margin: 0 }}>No applicants yet. Share your join code to get agents!</p>
+                      </div>
+                    ) : (
+                      roomRequests.map(req => (
+                        <div key={req.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px', background: PT.surfaceAlt, borderRadius: 14, border: `1.5px solid ${PT.border}` }}>
+                          <button
+                            onClick={() => handleViewApplicantProfile(req.user_id)}
+                            style={{ width: 44, height: 44, borderRadius: '50%', background: PT.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: 'none', cursor: 'pointer' }}
+                          >
+                            <span style={{ fontSize: 18, fontWeight: 800, color: PT.bg, fontFamily: '"Bricolage Grotesque",serif' }}>
+                              {(req.display_name ?? '?').charAt(0).toUpperCase()}
+                            </span>
+                          </button>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                              <p style={{ fontSize: 14, fontWeight: 700, color: PT.text, margin: 0 }}>{req.display_name ?? 'Anonymous'}</p>
+                              <button
+                                onClick={() => handleViewApplicantProfile(req.user_id)}
+                                style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 10, border: `1px solid ${PT.border}`, background: PT.surface, color: PT.textMuted, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                              >
+                                <Eye size={11} /> Profile
+                              </button>
+                            </div>
+                            {req.message && <p style={{ fontSize: 12, color: PT.textMuted, margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.message}</p>}
+                            <p style={{ fontSize: 11, color: PT.textMuted, margin: 0 }}>Applied {new Date(req.created_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}</p>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                            <button
+                              onClick={async () => { await approveRequest(req); setPasabuyDetailId(null); }}
+                              style={{ height: 36, padding: '0 14px', borderRadius: 10, border: '1.5px solid #86EFAC', background: '#DCFCE7', color: '#15803D', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                            >
+                              <UserCheck size={14} /> Confirm
+                            </button>
+                            <button
+                              onClick={() => rejectRequest(req.id)}
+                              style={{ height: 36, padding: '0 14px', borderRadius: 10, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                            >
+                              <UserX size={14} /> Reject
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Buyer swipe-to-confirm — shown when courier is confirmed */}
+              {isOwnerOfDetail && isConfirmed && (
+                <div style={{ margin: '0 16px 20px', padding: '14px 16px 16px', background: '#F0FDF4', borderRadius: 16, border: '1.5px solid #86EFAC' }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: '#15803D', margin: '0 0 10px' }}>🎉 Your agent has been confirmed! Mark as done once you receive your items.</p>
+                  <SwipeToConfirm
+                    label="Slide to complete order"
+                    color="#059669"
+                    onConfirm={async () => {
+                      await handlePasaBuyUpdate(detailRoom.id, { status: 'completed' } as any);
+                      setPasabuyDetailId(null);
+                    }}
+                  />
+                </div>
+              )}
+
+              <div style={{ height: 32 }} />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Room Detail Dialog — Rotary / Gaming / Cafe */}
+      {roomDetailId && (() => {
+        const detailRoom = rooms.find(r => r.id === roomDetailId);
+        if (!detailRoom) return null;
+        const isGD = detailRoom.category === 'gaming';
+        const isCD = detailRoom.category === 'cafe';
+        const DT = isGD ? { ...T, primary: '#7C3AED', accent: '#A855F7' } : isCD ? { ...T, primary: '#92400E', accent: '#D97706' } : T;
+        const isArchivedDetail = detailRoom.status === 'completed' || detailRoom.status === 'cancelled' || (!detailRoom.event_date && detailRoom.status !== 'confirmed') || (!!detailRoom.event_date && new Date(detailRoom.event_date) < now);
+        const detailFill = Math.min((detailRoom.member_count / detailRoom.max_members) * 100, 100);
+        const detailEventDisplay = detailRoom.event_date ? formatEventDate(detailRoom.event_date) : detailRoom.next_event;
+        const hasItineraryDetail = detailRoom.itinerary && detailRoom.itinerary.length > 0;
+        const isItinExpanded = expandedId === detailRoom.id;
+        const detailSocials = [
+          detailRoom.facebook_url && { Icon: FacebookIcon, url: detailRoom.facebook_url, color: '#1877F2' },
+          detailRoom.instagram_url && { Icon: InstagramIcon, url: detailRoom.instagram_url, color: '#E4405F' },
+          detailRoom.twitter_url && { Icon: TwitterIcon, url: detailRoom.twitter_url, color: '#1DA1F2' },
+          ...(detailRoom.other_socials ?? []).filter(s => s.url).map(s => ({ Icon: null, url: s.url, label: s.label, color: DT.primary })),
+        ].filter(Boolean);
+
+        return (
+          <div
+            onMouseDown={e => { if (e.target === e.currentTarget) (e.currentTarget as HTMLDivElement).dataset.dismissing = '1'; }}
+            onMouseUp={e => { if (e.target === e.currentTarget && (e.currentTarget as HTMLDivElement).dataset.dismissing === '1') setRoomDetailId(null); (e.currentTarget as HTMLDivElement).dataset.dismissing = ''; }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', fontFamily: '"DM Sans", system-ui, sans-serif' }}
+          >
+            <div style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', background: DT.surface, borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
+
+              {/* Header */}
+              <div style={{ padding: '18px 20px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p className="font-pixel" style={{ fontSize: 11, color: DT.accent, margin: '0 0 2px', letterSpacing: 1 }}>
+                    {isGD ? 'GAMING LOBBY' : isCD ? 'CAFE HANGOUT' : 'ROTARY ROOM'}
+                  </p>
+                  <h2 className="font-display" style={{ fontSize: 20, fontWeight: 800, color: DT.text, margin: '0 0 6px', lineHeight: 1.2 }}>{detailRoom.name}</h2>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {detailRoom.status === 'confirmed' && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
+                    {detailRoom.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
+                    {detailRoom.is_private && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: DT.surfaceAlt, color: DT.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} /> PRIVATE</span>}
+                    {detailRoom.user_id === userId && <span style={{ fontSize: 10, fontWeight: 700, background: DT.primary, color: DT.bg, padding: '2px 8px', borderRadius: 8 }}>YOUR {isGD ? 'LOBBY' : isCD ? 'HANGOUT' : 'ROOM'}</span>}
+                  </div>
+                </div>
+                <button onClick={() => setRoomDetailId(null)} style={{ width: 36, height: 36, borderRadius: '50%', background: DT.surfaceAlt, border: `1.5px solid ${DT.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: DT.textMuted, flexShrink: 0 }}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              <p style={{ padding: '10px 20px 0', fontSize: 13, color: DT.textMuted, margin: 0 }}>
+                Hosted by <strong style={{ color: DT.text }}>{detailRoom.host_name}</strong>
+              </p>
+
+              {/* Quick chips */}
+              {(isGD && detailRoom.game_name || detailEventDisplay || detailRoom.location_name) && (
+                <div style={{ padding: '10px 20px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {isGD && detailRoom.game_name && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: DT.surfaceAlt, border: `1px solid ${DT.border}` }}>
+                      <span style={{ fontSize: 14 }}>🎮</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: DT.text }}>{detailRoom.game_name}</span>
+                    </div>
+                  )}
+                  {detailEventDisplay && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: DT.surfaceAlt, border: `1px solid ${DT.border}` }}>
+                      <span style={{ fontSize: 14 }}>📅</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: DT.text }}>{detailEventDisplay}</span>
+                    </div>
+                  )}
+                  {detailRoom.location_name && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: DT.surfaceAlt, border: `1px solid ${DT.border}` }}>
+                      <MapPin size={13} style={{ color: DT.primary, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: DT.text }}>{detailRoom.location_name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Members */}
+              <div style={{ margin: '14px 20px 0', padding: '14px', background: DT.surfaceAlt, borderRadius: 16, border: `1px solid ${DT.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: DT.text }}>
+                    <Users size={13} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                    {isGD ? 'Players' : isCD ? 'Guests' : 'Members'}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: DT.primary }}>{detailRoom.member_count} / {detailRoom.max_members}</span>
+                </div>
+                <div style={{ height: 6, background: DT.surface, borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 3, width: `${detailFill}%`, background: DT.primary, transition: 'width 600ms' }} />
+                </div>
+              </div>
+
+              {/* Description */}
+              {detailRoom.description && (
+                <div style={{ margin: '14px 20px 0', padding: '14px', background: DT.surfaceAlt, borderRadius: 16, border: `1px solid ${DT.border}` }}>
+                  <pre style={{ fontSize: 13, color: DT.text, margin: 0, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{detailRoom.description}</pre>
+                </div>
+              )}
+
+              {/* Social links */}
+              {detailSocials.length > 0 && (
+                <div style={{ padding: '14px 20px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {detailSocials.map((s, i) => s && (
+                    s.Icon
+                      ? <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ width: 36, height: 36, borderRadius: 10, background: `${s.color}18`, border: `1px solid ${s.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}>
+                          <s.Icon size={16} color={s.color} />
+                        </a>
+                      : <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ padding: '6px 12px', borderRadius: 10, background: `${DT.primary}12`, border: `1px solid ${DT.primary}33`, display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 600, color: DT.primary, textDecoration: 'none', gap: 4 }}>
+                          🔗 {(s as { label?: string }).label || 'Link'}
+                        </a>
+                  ))}
+                </div>
+              )}
+
+              {/* Itinerary (Rotary only) */}
+              {hasItineraryDetail && (
+                <div style={{ margin: '14px 20px 0', borderRadius: 16, border: `1px solid ${DT.border}`, overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setExpandedId(isItinExpanded ? null : detailRoom.id)}
+                    style={{ width: '100%', padding: '12px 16px', background: DT.surfaceAlt, border: 'none', borderBottom: isItinExpanded ? `1px solid ${DT.border}` : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: 'inherit' }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 700, color: DT.primary }}>📋 Itinerary ({detailRoom.itinerary.length} steps)</span>
+                    {isItinExpanded ? <ChevronUp size={14} style={{ color: DT.textMuted }} /> : <ChevronDown size={14} style={{ color: DT.textMuted }} />}
+                  </button>
+                  {isItinExpanded && (
+                    <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {detailRoom.itinerary.map((item, idx) => (
+                        <div key={item.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${DT.primary}18`, border: `1.5px solid ${DT.primary}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: DT.primary, flexShrink: 0 }}>{idx + 1}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {item.time && <span style={{ fontSize: 12, color: DT.textMuted, fontWeight: 600 }}>{item.time}</span>}
+                              <span style={{ fontSize: 13, fontWeight: 700, color: DT.text }}>{item.title}</span>
+                            </div>
+                            {item.description && <p style={{ fontSize: 12, color: DT.textMuted, margin: '2px 0 0', lineHeight: 1.4 }}>{item.description}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Host swipe-to-end — shown at bottom of detail dialog */}
+              {detailRoom.user_id === userId && !isArchivedDetail && (
+                <div style={{ margin: '14px 20px 0', padding: '14px 16px 16px', background: `${DT.primary}0D`, borderRadius: 16, border: `1.5px solid ${DT.primary}44` }}>
+                  <p style={{ fontSize: 12, fontWeight: 700, color: DT.primary, margin: '0 0 10px' }}>
+                    {isGD ? '🎮 End the lobby when the session is over.' : isCD ? '☕ Close the hangout when everyone has left.' : '🏛️ End the room when the rotary is done.'}
+                  </p>
+                  <SwipeToConfirm
+                    label={isGD ? 'Slide to end lobby' : isCD ? 'Slide to close hangout' : 'Slide to end room'}
+                    color={DT.primary}
+                    onConfirm={async () => {
+                      await updateRoom(detailRoom.id, { status: 'completed' } as any);
+                      setRoomDetailId(null);
+                    }}
+                  />
+                </div>
+              )}
+
+              <div style={{ height: 32 }} />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Share Room Card */}
+      {shareRoomId && (() => {
+        const shareRoom = rooms.find(r => r.id === shareRoomId);
+        if (!shareRoom) return null;
+        return (
+          <ShareRoomCard
+            onClose={() => setShareRoomId(null)}
+            theme={activeTheme}
+            room={shareRoom}
+            category={categoryTab}
+          />
+        );
+      })()}
+
       {/* Rotary Wizard */}
       {wizardOpen && categoryTab === 'rotary' && (
         <RoomWizard
           theme={T}
           editing={editing}
+          initialCategory="rotary"
           userId={userId}
           onClose={() => { setWizardOpen(false); setEditing(null); }}
           onCreate={handleRotaryCreate}
@@ -700,6 +1080,7 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
         <RoomWizard
           theme={{ ...T, primary: '#7C3AED', accent: '#A855F7' }}
           editing={editing}
+          initialCategory="gaming"
           userId={userId}
           onClose={() => { setWizardOpen(false); setEditing(null); }}
           onCreate={handleGamingCreate}
@@ -712,6 +1093,7 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
         <RoomWizard
           theme={{ ...T, primary: '#92400E', accent: '#D97706' }}
           editing={editing}
+          initialCategory="cafe"
           userId={userId}
           onClose={() => { setWizardOpen(false); setEditing(null); }}
           onCreate={handleCafeCreate}

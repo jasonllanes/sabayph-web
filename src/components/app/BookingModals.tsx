@@ -1,7 +1,121 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Star, MapPin, ShoppingBasket, Clock, DollarSign, CheckCircle2, XCircle, Package } from 'lucide-react';
+import { X, Star, MapPin, ShoppingBasket, Clock, DollarSign, XCircle, Package } from 'lucide-react';
 import type { Theme, Room, BookingRating } from '@/types';
+
+// ── Swipe-to-confirm ─────────────────────────────────────────────────────────
+
+export function SwipeToConfirm({
+  label = 'Slide to confirm',
+  sublabel,
+  color = '#059669',
+  onConfirm,
+}: {
+  label?: string;
+  sublabel?: string;
+  color?: string;
+  onConfirm: () => void;
+}) {
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [done, setDone] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef(0);
+  const draggingRef = useRef(false);
+
+  const THUMB = 54;
+  const PAD = 4;
+  const getMax = () => Math.max((trackRef.current?.offsetWidth ?? 280) - THUMB - PAD * 2, 1);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (done) return;
+    draggingRef.current = true;
+    setDragging(true);
+    startXRef.current = e.clientX - dragX;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    const max = getMax();
+    const x = Math.max(0, Math.min(e.clientX - startXRef.current, max));
+    setDragX(x);
+  };
+
+  const onPointerUp = () => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    setDragging(false);
+    const max = getMax();
+    if (dragX / max >= 0.75) {
+      setDragX(max);
+      setDone(true);
+      setTimeout(onConfirm, 380);
+    } else {
+      setDragX(0);
+    }
+  };
+
+  const pct = dragX / getMax();
+
+  return (
+    <div>
+      {sublabel && (
+        <p style={{ fontSize: 12, color: '#9CA3AF', margin: '0 0 10px', textAlign: 'center' }}>{sublabel}</p>
+      )}
+      <div
+        ref={trackRef}
+        style={{
+          position: 'relative', height: 58, borderRadius: 29,
+          background: done ? `${color}25` : `${color}12`,
+          border: `2px solid ${done ? color : color + '55'}`,
+          overflow: 'hidden', touchAction: 'none', userSelect: 'none',
+          transition: 'border-color 300ms, background 300ms',
+        }}
+      >
+        {/* Progress fill */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          width: PAD + THUMB / 2 + dragX,
+          background: `${color}1A`, borderRadius: 29,
+          transition: dragging ? 'none' : 'width 300ms ease',
+          pointerEvents: 'none',
+        }} />
+        {/* Centre label */}
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', gap: 6 }}>
+          {done ? (
+            <span style={{ fontSize: 14, fontWeight: 800, color }}>✓ Confirmed!</span>
+          ) : (
+            <>
+              <span style={{ fontSize: 14, fontWeight: 700, color, opacity: Math.max(0.15, 1 - pct * 2.2), transition: 'opacity 80ms' }}>{label}</span>
+              {[1, 2, 3].map(i => (
+                <span key={i} style={{ fontSize: 14, color, opacity: Math.max(0, (0.5 - i * 0.12) - pct * 0.8), transition: 'opacity 80ms' }}>›</span>
+              ))}
+            </>
+          )}
+        </div>
+        {/* Thumb */}
+        <div
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          style={{
+            position: 'absolute', top: PAD, left: PAD + dragX,
+            width: THUMB, height: 58 - PAD * 2, borderRadius: 25,
+            background: done ? color : '#fff',
+            boxShadow: '0 2px 14px rgba(0,0,0,0.18)',
+            cursor: done ? 'default' : 'grab',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 22, transition: dragging ? 'none' : 'left 300ms ease, background 250ms',
+            zIndex: 2, touchAction: 'none', userSelect: 'none',
+          }}
+        >
+          {done ? '✓' : '→'}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,8 +165,7 @@ export function BookingDetailSheet({ room, isOwner, courierName, theme: T, onClo
       : { label: '📦 Active booking', bg: '#FEF3E2', color: '#D97706', border: '#F9C07E' };
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 500, display: 'flex', alignItems: 'flex-end' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 500, display: 'flex', alignItems: 'flex-end' }}>
       <div style={{ width: '100%', background: T.surface, borderRadius: '20px 20px 0 0', maxHeight: '82vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 40px rgba(0,0,0,0.3)' }}>
         {/* Handle */}
         <div style={{ flexShrink: 0, padding: '12px 20px 0' }}>
@@ -139,19 +252,26 @@ export function BookingDetailSheet({ room, isOwner, courierName, theme: T, onClo
 
         </div>
 
-        {/* Sticky action footer — always visible above bottom nav */}
+        {/* Sticky action footer */}
         {isActive && (
-          <div style={{ flexShrink: 0, padding: '12px 20px 20px', borderTop: `1px solid ${T.border}`, background: T.surface, display: 'flex', gap: 10 }}>
-            <button onClick={onCancel}
-              style={{ flex: 1, height: 50, borderRadius: 25, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <XCircle size={16} /> Cancel Booking
-            </button>
+          <div style={{ flexShrink: 0, borderTop: `1px solid ${T.border}`, background: T.surface }}>
+            {/* Buyer swipe-to-confirm */}
             {isOwner && (
-              <button onClick={onComplete}
-                style={{ flex: 1, height: 50, borderRadius: 25, border: 'none', background: '#059669', color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <CheckCircle2 size={16} /> Mark as Done
-              </button>
+              <div style={{ padding: '14px 20px 4px' }}>
+                <SwipeToConfirm
+                  label="Slide to mark as done"
+                  sublabel="Confirm the delivery was completed"
+                  color="#059669"
+                  onConfirm={onComplete}
+                />
+              </div>
             )}
+            <div style={{ padding: isOwner ? '8px 20px 20px' : '12px 20px 20px' }}>
+              <button onClick={onCancel}
+                style={{ width: '100%', height: 46, borderRadius: 23, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <XCircle size={16} /> Cancel Booking
+              </button>
+            </div>
           </div>
         )}
       </div>

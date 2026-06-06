@@ -158,6 +158,34 @@ export interface Connection {
   created_at: string;
 }
 
+export interface Report {
+  id: string;
+  reporter_id: string | null;
+  reported_user_id: string;
+  reason: string;
+  details: string | null;
+  status: 'pending' | 'reviewed' | 'dismissed';
+  created_at: string;
+  reporter_name?: string | null;
+  reported_name?: string | null;
+  reported_avatar?: string | null;
+}
+
+export interface IdSubmission {
+  id: string;
+  user_id: string;
+  id_type: string;
+  id_front_url: string;
+  id_back_url: string;
+  status: 'pending' | 'approved' | 'rejected';
+  rejection_reason: string | null;
+  submitted_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+}
+
 export interface DiscoverProfile {
   id: string;
   display_name: string | null;

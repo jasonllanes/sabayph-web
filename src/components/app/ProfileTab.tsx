@@ -37,13 +37,19 @@ function getVerifySteps(
   phoneAdded: boolean,
   locationPinned: boolean,
   idVerified: boolean,
+  idSubmitStatus: 'none' | 'pending' | 'approved' | 'rejected',
 ) {
+  const idSub =
+    idVerified ? 'Verified by admin' :
+    idSubmitStatus === 'pending' ? 'Under review — check back soon' :
+    idSubmitStatus === 'rejected' ? 'Submission rejected — please resubmit' :
+    'Upload front & back of your government ID';
   return [
     { key: 'profile', label: 'Complete your profile', sub: 'Display name, bio, and location', done: profileCompleted },
     { key: 'email', label: 'Verify email address', sub: 'Confirm via email link', done: emailVerified },
     { key: 'phone', label: 'Add phone number', sub: 'Save your contact number', done: phoneAdded },
     { key: 'location', label: 'Pin home location', sub: 'Mark your area on the map', done: locationPinned },
-    { key: 'id', label: 'Verify your ID', sub: 'Self-attest a government-issued ID', done: idVerified },
+    { key: 'id', label: 'Verify your ID', sub: idSub, done: idVerified },
   ];
 }
 
@@ -278,7 +284,7 @@ function ProfileSkeleton({ T }: { T: Theme }) {
   );
 }
 
-// ── ID Verify form ────────────────────────────────────────────────────────────
+// ── ID Upload form ────────────────────────────────────────────────────────────
 
 const PH_ID_TYPES = [
   'PhilSys / National ID', "Driver's License (LTO)", 'Passport', 'SSS / UMID',
@@ -286,30 +292,97 @@ const PH_ID_TYPES = [
   'Senior Citizen ID', 'Postal ID', 'Barangay ID',
 ];
 
-interface IdVerifyFormProps {
-  T: any; inputSt: any;
-  idType: string; setIdType: (v: string) => void;
-  idLast4: string; setIdLast4: (v: string) => void;
-  idConfirm: boolean; setIdConfirm: (v: boolean) => void;
-  savingId: boolean; setSavingId: (v: boolean) => void;
-  idError: string; setIdError: (v: string) => void;
-  onClose: () => void; userId?: string;
+function compressImage(file: File, maxPx = 1200, quality = 0.82): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob failed')), 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
 }
 
-function IdVerifyForm({ T, inputSt, idType, setIdType, idLast4, setIdLast4, idConfirm, setIdConfirm, savingId, setSavingId, idError, setIdError, onClose, userId }: IdVerifyFormProps) {
+interface IdUploadFormProps {
+  T: any; inputSt: any;
+  idType: string; setIdType: (v: string) => void;
+  onClose: () => void;
+  onSubmitted: () => void;
+  userId?: string;
+}
+
+function IdUploadForm({ T, inputSt, idType, setIdType, onClose, onSubmitted, userId }: IdUploadFormProps) {
+  const [frontFile, setFrontFile] = useState<File | null>(null);
+  const [backFile, setBackFile] = useState<File | null>(null);
+  const [frontPreview, setFrontPreview] = useState('');
+  const [backPreview, setBackPreview] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const pickFile = (side: 'front' | 'back', file: File | null) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    if (side === 'front') { setFrontFile(file); setFrontPreview(url); }
+    else { setBackFile(file); setBackPreview(url); }
+  };
+
   const handleSubmit = async () => {
-    if (!idType) { setIdError('Please select your ID type.'); return; }
-    if (idLast4.trim().length < 2) { setIdError('Enter at least the last 2 characters of your ID number.'); return; }
-    if (!idConfirm) { setIdError('Please confirm the information matches your actual ID.'); return; }
-    setIdError(''); setSavingId(true);
-    if (userId) {
-      const { error } = await supabase.from('profiles').update({
-        id_type: idType, id_last4: idLast4.trim().toUpperCase(), id_verified: true,
-      }).eq('id', userId);
-      if (error) { setIdError(error.message); setSavingId(false); return; }
+    if (!idType) { setError('Please select your ID type.'); return; }
+    if (!frontFile) { setError('Please upload the front of your ID.'); return; }
+    if (!backFile) { setError('Please upload the back of your ID.'); return; }
+    if (!userId) { setError('Not logged in.'); return; }
+    setError(''); setSubmitting(true);
+
+    let frontBlob: Blob, backBlob: Blob;
+    try {
+      [frontBlob, backBlob] = await Promise.all([
+        compressImage(frontFile),
+        compressImage(backFile),
+      ]);
+    } catch {
+      setError('Failed to process images. Please try a different file.'); setSubmitting(false); return;
     }
-    setSavingId(false);
+
+    const ts = Date.now();
+    const frontPath = `${userId}/front_${ts}.jpg`;
+    const backPath = `${userId}/back_${ts}.jpg`;
+
+    const [fr, br] = await Promise.all([
+      supabase.storage.from('id-photos').upload(frontPath, frontBlob, { upsert: true, contentType: 'image/jpeg' }),
+      supabase.storage.from('id-photos').upload(backPath, backBlob, { upsert: true, contentType: 'image/jpeg' }),
+    ]);
+
+    if (fr.error || br.error) {
+      setError(fr.error?.message || br.error?.message || 'Upload failed. Make sure the id-photos bucket exists in Supabase storage.');
+      setSubmitting(false); return;
+    }
+
+    const frontUrl = supabase.storage.from('id-photos').getPublicUrl(frontPath).data.publicUrl;
+    const backUrl = supabase.storage.from('id-photos').getPublicUrl(backPath).data.publicUrl;
+
+    const { error: insertErr } = await supabase.from('id_submissions').insert({
+      user_id: userId, id_type: idType, id_front_url: frontUrl, id_back_url: backUrl, status: 'pending',
+    });
+
+    if (insertErr) { setError(insertErr.message); setSubmitting(false); return; }
+    setSubmitting(false);
+    onSubmitted();
     onClose();
+  };
+
+  const filePickerStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+    borderRadius: 10, border: `1.5px dashed ${T.border}`, background: T.bg,
+    cursor: 'pointer', transition: 'border-color 150ms',
   };
 
   return (
@@ -317,13 +390,13 @@ function IdVerifyForm({ T, inputSt, idType, setIdType, idLast4, setIdLast4, idCo
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
         <div>
           <p style={{ fontSize: 13, fontWeight: 800, color: T.text, margin: '0 0 3px', fontFamily: '"Bricolage Grotesque",serif' }}>
-            🪪 Self-attest your Government ID
+            🪪 Upload Government ID
           </p>
           <p style={{ fontSize: 11, color: T.textMuted, margin: 0, lineHeight: 1.5 }}>
-            We only store your ID type and last 4 characters — never the full number or a photo.
+            Submit front &amp; back of your ID. Admin reviews within 1–2 business days.
           </p>
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex', flexShrink: 0, marginLeft: 8 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, flexShrink: 0, marginLeft: 8, display: 'flex' }}>
           <X size={15} />
         </button>
       </div>
@@ -331,44 +404,53 @@ function IdVerifyForm({ T, inputSt, idType, setIdType, idLast4, setIdLast4, idCo
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>
           <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>ID TYPE *</label>
-          <select value={idType} onChange={e => setIdType(e.target.value)}
-            style={{ ...inputSt, height: 42, cursor: 'pointer' }}>
+          <select value={idType} onChange={e => setIdType(e.target.value)} style={{ ...inputSt, height: 42, cursor: 'pointer' }}>
             <option value="">Select your ID type…</option>
             {PH_ID_TYPES.map(id => <option key={id} value={id}>{id}</option>)}
           </select>
         </div>
 
+        {/* Front */}
         <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>LAST 4 CHARACTERS OF ID NUMBER *</label>
-          <input
-            value={idLast4}
-            onChange={e => setIdLast4(e.target.value.slice(0, 4))}
-            placeholder="e.g. 7X3K"
-            maxLength={4}
-            style={{ ...inputSt, height: 42, fontFamily: '"VT323",monospace', fontSize: 20, letterSpacing: 4, textTransform: 'uppercase' }}
-          />
-          <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 0' }}>
-            Only the last portion — keeps your full ID number private.
-          </p>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>FRONT OF ID *</label>
+          <label style={filePickerStyle}>
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickFile('front', e.target.files?.[0] ?? null)} />
+            <span style={{ fontSize: 18 }}>📷</span>
+            <span style={{ fontSize: 12, color: frontFile ? T.text : T.textMuted, fontWeight: frontFile ? 600 : 400 }}>
+              {frontFile ? frontFile.name : 'Tap to choose front photo'}
+            </span>
+          </label>
+          {frontPreview && (
+            <img src={frontPreview} alt="Front ID preview" style={{ width: '100%', borderRadius: 8, marginTop: 6, maxHeight: 140, objectFit: 'cover', border: `1px solid ${T.border}` }} />
+          )}
         </div>
 
-        <button type="button" onClick={() => setIdConfirm(!idConfirm)}
-          style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit', textAlign: 'left' }}>
-          <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${idConfirm ? T.primary : T.border}`, background: idConfirm ? T.primary : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1, transition: 'all 150ms' }}>
-            {idConfirm && <Check size={11} color="#fff" strokeWidth={3} />}
-          </div>
-          <p style={{ fontSize: 12, color: T.text, margin: 0, lineHeight: 1.5 }}>
-            I confirm I hold a valid <strong>{idType || 'government-issued ID'}</strong> and the information above accurately reflects it.
-          </p>
-        </button>
+        {/* Back */}
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, display: 'block', marginBottom: 5, letterSpacing: 0.4 }}>BACK OF ID *</label>
+          <label style={filePickerStyle}>
+            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickFile('back', e.target.files?.[0] ?? null)} />
+            <span style={{ fontSize: 18 }}>📷</span>
+            <span style={{ fontSize: 12, color: backFile ? T.text : T.textMuted, fontWeight: backFile ? 600 : 400 }}>
+              {backFile ? backFile.name : 'Tap to choose back photo'}
+            </span>
+          </label>
+          {backPreview && (
+            <img src={backPreview} alt="Back ID preview" style={{ width: '100%', borderRadius: 8, marginTop: 6, maxHeight: 140, objectFit: 'cover', border: `1px solid ${T.border}` }} />
+          )}
+        </div>
 
-        {idError && (
-          <p style={{ fontSize: 12, color: '#B91C1C', background: '#FEE2E2', padding: '8px 12px', borderRadius: 8, margin: 0 }}>{idError}</p>
+        <p style={{ fontSize: 11, color: T.textMuted, margin: 0, lineHeight: 1.5, padding: '8px 10px', background: `${T.primary}10`, borderRadius: 8, border: `1px solid ${T.primary}22` }}>
+          🔒 Your ID photos are stored securely and only accessible to SabayPH admins for verification purposes.
+        </p>
+
+        {error && (
+          <p style={{ fontSize: 12, color: '#B91C1C', background: '#FEE2E2', padding: '8px 12px', borderRadius: 8, margin: 0 }}>{error}</p>
         )}
 
-        <button onClick={handleSubmit} disabled={savingId}
-          style={{ width: '100%', height: 44, borderRadius: 22, border: 'none', background: savingId ? T.border : T.primary, color: savingId ? T.textMuted : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: savingId ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-          {savingId ? 'Saving…' : <><Check size={15} /> Confirm Verification</>}
+        <button onClick={handleSubmit} disabled={submitting}
+          style={{ width: '100%', height: 44, borderRadius: 22, border: 'none', background: submitting ? T.border : T.primary, color: submitting ? T.textMuted : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+          {submitting ? 'Uploading…' : <><Check size={15} /> Submit for Review</>}
         </button>
       </div>
     </div>
@@ -459,10 +541,9 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
   // ID verification
   const [idVerifyOpen, setIdVerifyOpen] = useState(false);
   const [idType, setIdType] = useState('');
-  const [idLast4, setIdLast4] = useState('');
-  const [idConfirm, setIdConfirm] = useState(false);
-  const [savingId, setSavingId] = useState(false);
-  const [idError, setIdError] = useState('');
+  const [idSubmitStatus, setIdSubmitStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
+  const [idRejectionReason, setIdRejectionReason] = useState<string | null>(null);
+  const [idSubmitLoaded, setIdSubmitLoaded] = useState(false);
 
   if (profile && !profileLoaded) {
     setFb(profile.facebook_url ?? '');
@@ -506,6 +587,24 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
     setPrivacyLoaded(true);
   }
 
+  // Fetch latest ID submission status
+  if (userId && !idSubmitLoaded && !idVerifyOpen) {
+    setIdSubmitLoaded(true);
+    supabase
+      .from('id_submissions')
+      .select('status, rejection_reason')
+      .eq('user_id', userId)
+      .order('submitted_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setIdSubmitStatus(data.status as 'none' | 'pending' | 'approved' | 'rejected');
+          setIdRejectionReason(data.rejection_reason ?? null);
+        }
+      });
+  }
+
   // Derived state
   const emailVerified = !!supabaseUser?.email_confirmed_at;
   const phoneAdded = !!(profile?.contact_phone);
@@ -522,7 +621,7 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
     : null;
   const isNewJoiner = daysSinceJoined !== null && daysSinceJoined < 90;
 
-  const verifySteps = getVerifySteps(profileCompleted, emailVerified, phoneAdded, locationPinned, idVerified);
+  const verifySteps = getVerifySteps(profileCompleted, emailVerified, phoneAdded, locationPinned, idVerified, idSubmitStatus);
   const doneCount = verifySteps.filter(s => s.done).length;
   const badge = badgeConfig(doneCount);
   const BadgeIcon = badge.Icon;
@@ -988,14 +1087,23 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
                         {step.done ? 'Edit' : 'Pin'}
                       </button>
                     )}
-                    {step.key === 'id' && !step.done && (
-                      <button onClick={() => { setIdVerifyOpen(o => !o); setIdError(''); }}
-                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: T.highlight, color: '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                        Verify
+                    {step.key === 'id' && step.done && (
+                      <span style={{ padding: '5px 12px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#15803D' }}>✓ Verified</span>
+                    )}
+                    {step.key === 'id' && !step.done && idSubmitStatus === 'pending' && (
+                      <span style={{ padding: '5px 12px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: '#FEF9C3', color: '#A16207', border: '1px solid #FDE047' }}>⏳ Reviewing</span>
+                    )}
+                    {step.key === 'id' && !step.done && idSubmitStatus === 'rejected' && (
+                      <button onClick={() => { setIdVerifyOpen(o => !o); }}
+                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: '#FEE2E2', color: '#B91C1C', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        Resubmit
                       </button>
                     )}
-                    {step.key === 'id' && step.done && (
-                      <span style={{ padding: '5px 12px', borderRadius: 16, fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#15803D' }}>✓ Done</span>
+                    {step.key === 'id' && !step.done && (idSubmitStatus === 'none') && (
+                      <button onClick={() => setIdVerifyOpen(o => !o)}
+                        style={{ padding: '5px 14px', borderRadius: 16, fontSize: 11, fontWeight: 700, border: 'none', background: T.highlight, color: '#06131B', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                        Upload
+                      </button>
                     )}
                   </div>
                 ))}
@@ -1004,22 +1112,23 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
 
             {/* ── ID Verification inline form ── */}
             {idVerifyOpen && !idVerified && (
-              <IdVerifyForm
-                T={T}
-                inputSt={inputSt}
-                idType={idType}
-                setIdType={setIdType}
-                idLast4={idLast4}
-                setIdLast4={setIdLast4}
-                idConfirm={idConfirm}
-                setIdConfirm={setIdConfirm}
-                savingId={savingId}
-                idError={idError}
-                setIdError={setIdError}
-                setSavingId={setSavingId}
-                onClose={() => setIdVerifyOpen(false)}
-                userId={userId}
-              />
+              <>
+                {idSubmitStatus === 'rejected' && idRejectionReason && (
+                  <div style={{ margin: '0 16px 8px', padding: '10px 14px', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 10 }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#B91C1C', margin: '0 0 3px' }}>Previous submission rejected</p>
+                    <p style={{ fontSize: 12, color: '#7F1D1D', margin: 0 }}>{idRejectionReason}</p>
+                  </div>
+                )}
+                <IdUploadForm
+                  T={T}
+                  inputSt={inputSt}
+                  idType={idType}
+                  setIdType={setIdType}
+                  onClose={() => setIdVerifyOpen(false)}
+                  onSubmitted={() => { setIdSubmitStatus('pending'); setIdRejectionReason(null); }}
+                  userId={userId}
+                />
+              </>
             )}
 
             {/* ── Inline profile edit ── */}
@@ -1348,7 +1457,6 @@ export default function ProfileTab({ theme: T, user, supabaseUser, avatarUrl, us
       {locationDialogOpen && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-          onClick={e => { if (e.target === e.currentTarget) setLocationDialogOpen(false); }}
         >
           <div style={{ width: '100%', maxWidth: 480, background: T.surface, borderRadius: 20, boxShadow: '0 24px 64px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
             {/* Header */}

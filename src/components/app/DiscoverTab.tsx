@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Shield, Check, ArrowRight, ShieldCheck, ShieldAlert, Star, UserPlus, Loader, Users, BookOpen, LayoutGrid } from 'lucide-react';
+import { Shield, Check, ArrowRight, ShieldCheck, ShieldAlert, Star, UserPlus, Loader, Users, BookOpen, LayoutGrid, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PixelHeart, PixelPlus } from '@/components/common/PixelDecorations';
 import { CATEGORIES, CATEGORY_DETAILS, FEATURES, TRUST_ITEMS } from '@/data/themes';
 import { useDiscoverPeople } from '@/hooks/useDiscoverPeople';
@@ -183,6 +183,22 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
   const { getStatus, getConnection, sendRequest, acceptRequest, removeConnection, loading: connLoading, error: connError, tableReady } = useConnections(userId);
 
   const [viewingProfile, setViewingProfile] = useState<DiscoverProfile | null>(null);
+  const peopleScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const updateScrollState = () => {
+    const el = peopleScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+  };
+
+  const scrollPeople = (dir: 'left' | 'right') => {
+    const el = peopleScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -280 : 280, behavior: 'smooth' });
+  };
 
   const selectCategory = (id: ThemeKey) => {
     if (activeCategory === id) {
@@ -358,11 +374,37 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
             <p style={{ fontSize: 13, margin: 0 }}>No kasama visible yet.<br />Complete your profile to appear here!</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'none' }}>
-            <style>{`div::-webkit-scrollbar{display:none}`}</style>
-            {people.map(person => (
-              <PersonCard key={person.id} person={person} theme={theme} onView={() => setViewingProfile(person)} />
-            ))}
+          <div style={{ position: 'relative' }}>
+            {/* Left arrow */}
+            {canScrollLeft && (
+              <button
+                onClick={() => scrollPeople('left')}
+                style={{ position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 34, height: 34, borderRadius: '50%', background: theme.surface, border: `1.5px solid ${theme.border}`, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: theme.text }}
+              >
+                <ChevronLeft size={18} />
+              </button>
+            )}
+
+            <div
+              ref={peopleScrollRef}
+              onScroll={updateScrollState}
+              style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8, scrollbarWidth: 'none' }}
+            >
+              <style>{`div::-webkit-scrollbar{display:none}`}</style>
+              {people.map(person => (
+                <PersonCard key={person.id} person={person} theme={theme} onView={() => setViewingProfile(person)} />
+              ))}
+            </div>
+
+            {/* Right arrow */}
+            {canScrollRight && people.length > 2 && (
+              <button
+                onClick={() => scrollPeople('right')}
+                style={{ position: 'absolute', right: -12, top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: 34, height: 34, borderRadius: '50%', background: theme.surface, border: `1.5px solid ${theme.border}`, boxShadow: '0 2px 10px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: theme.text }}
+              >
+                <ChevronRight size={18} />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -477,6 +519,7 @@ export default function DiscoverTab({ theme, activeCategory, onCategoryChange, u
         <ProfileViewModal
           person={viewingProfile}
           theme={theme}
+          currentUserId={userId}
           connectionStatus={getStatus(viewingProfile.id)}
           connectionLoading={connLoading}
           connectionError={connError}

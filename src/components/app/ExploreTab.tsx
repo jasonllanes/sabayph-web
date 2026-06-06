@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Search, X, Navigation, Users, Lock, Home, Send, Check, Map, Calendar, Gamepad2, ShoppingBasket, Coffee, Heart, Clock } from 'lucide-react';
+import { MapPin, Search, X, Navigation, Users, Lock, Home, Send, Check, Map, Calendar, Gamepad2, ShoppingBasket, Coffee, Heart, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import type { Room } from '@/types';
 import { useProfile } from '@/hooks/useProfile';
 import { submitJoinRequest, getMyRequestStatus } from '@/hooks/useJoinRequests';
@@ -35,6 +36,10 @@ const CAT_STYLE: Record<string, {
   pasabuy: { headerBg: '#B45309', headerText: '#FFFBEB', badgeBg: '#FFFBEB', badgeText: '#B45309', image: IMG('pasabuy.png'), Icon: ShoppingBasket, whatLabel: 'Items' },
 };
 
+function formatEventDate(iso: string): string {
+  return new Date(iso).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -65,14 +70,19 @@ interface RoomCardProps {
   onOpenRequest: () => void;
   onSendRequest: () => void;
   onCancelRequest: () => void;
+  onOpenDetail: () => void;
 }
 
-function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, requestMsg, joinError, onRequestMsg, onOpenRequest, onSendRequest, onCancelRequest }: RoomCardProps) {
+function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, requestMsg, joinError, onRequestMsg, onOpenRequest, onSendRequest, onCancelRequest, onOpenDetail }: RoomCardProps) {
   const cat = CAT_STYLE[room.category] ?? CAT_STYLE.rotary;
   const CatIcon = cat.Icon;
   const isOwn = userId === room.user_id;
   const isOpen = requestingId === room.id;
   const pct = Math.min(100, Math.round((room.member_count / room.max_members) * 100));
+  // On dark surfaces cat.headerBg can be darker than the surface itself (e.g. Gaming #1E1B4B on #142536)
+  // so use cat.headerText (always light) as the accent on dark backgrounds
+  const isDarkSurface = parseInt(T.surface.replace('#', '').slice(0, 2), 16) < 100;
+  const accentColor = isDarkSurface ? cat.headerText : cat.headerBg;
 
   const memberLabel = room.category === 'gaming' ? 'players'
     : room.category === 'cafe' ? 'guests'
@@ -107,8 +117,14 @@ function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, request
       onMouseEnter={e => { (e.currentTarget.style.boxShadow = `6px 6px 0 ${cat.headerBg}55`); (e.currentTarget.style.transform = 'translateY(-1px)'); }}
       onMouseLeave={e => { (e.currentTarget.style.boxShadow = `4px 4px 0 ${cat.headerBg}22`); (e.currentTarget.style.transform = 'none'); }}
     >
-      {/* ── Colored header ── */}
-      <div style={{ background: cat.headerBg, padding: '14px 16px 12px', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+      {/* ── Colored header — tap to view full details ── */}
+      <div
+        onClick={onOpenDetail}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onOpenDetail(); }}
+        style={{ background: cat.headerBg, padding: '14px 16px 12px', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, cursor: 'pointer' }}
+      >
         {/* Grid pattern */}
         <div style={{ position: 'absolute', inset: 0, opacity: 0.08, backgroundImage: 'linear-gradient(rgba(255,255,255,0.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.8) 1px,transparent 1px)', backgroundSize: '14px 14px', pointerEvents: 'none' }} />
 
@@ -138,32 +154,32 @@ function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, request
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
           {whenValue && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.text }}>
-              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${cat.headerBg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {room.category === 'pasabuy' ? <Clock size={11} style={{ color: cat.headerBg }} /> : <Calendar size={11} style={{ color: cat.headerBg }} />}
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {room.category === 'pasabuy' ? <Clock size={11} style={{ color: accentColor }} /> : <Calendar size={11} style={{ color: accentColor }} />}
               </div>
               <span style={{ fontWeight: 600 }}>{whenValue}</span>
             </div>
           )}
           {whereValue && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.textMuted }}>
-              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${cat.headerBg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {room.category === 'gaming' ? <Gamepad2 size={11} style={{ color: cat.headerBg }} /> : <MapPin size={11} style={{ color: cat.headerBg }} />}
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {room.category === 'gaming' ? <Gamepad2 size={11} style={{ color: accentColor }} /> : <MapPin size={11} style={{ color: accentColor }} />}
               </div>
               <span>{whereValue}</span>
             </div>
           )}
           {whatValue && room.category !== 'pasabuy' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.textMuted }}>
-              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${cat.headerBg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <CatIcon size={11} style={{ color: cat.headerBg }} />
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CatIcon size={11} style={{ color: accentColor }} />
               </div>
               <span>{whatValue}</span>
             </div>
           )}
           {room.category === 'pasabuy' && whatValue && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12, color: T.textMuted }}>
-              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${cat.headerBg}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                <ShoppingBasket size={11} style={{ color: cat.headerBg }} />
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                <ShoppingBasket size={11} style={{ color: accentColor }} />
               </div>
               <span style={{ lineHeight: 1.4 }}>{whatValue}</span>
             </div>
@@ -172,7 +188,7 @@ function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, request
 
         {/* Description */}
         {room.description && (
-          <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 10px', lineHeight: 1.5, borderLeft: `2px solid ${cat.headerBg}44`, paddingLeft: 8 }}>
+          <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 10px', lineHeight: 1.5, borderLeft: `2px solid ${accentColor}55`, paddingLeft: 8 }}>
             {room.description.length > 100 ? room.description.slice(0, 100) + '…' : room.description}
           </p>
         )}
@@ -180,7 +196,7 @@ function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, request
         {/* Member bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ flex: 1, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: 'hidden' }}>
-            <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: pct >= 90 ? '#C82718' : cat.headerBg, transition: 'width 400ms ease' }} />
+            <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: pct >= 90 ? '#C82718' : accentColor, transition: 'width 400ms ease' }} />
           </div>
           <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, flexShrink: 0 }}>
             {room.member_count}/{room.max_members} {memberLabel}
@@ -190,7 +206,7 @@ function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, request
 
       {/* ── Join action ── */}
       {userId && !isOwn && (
-        <div style={{ borderTop: `1px solid ${T.border}`, padding: '10px 14px', background: `${cat.headerBg}08` }}>
+        <div style={{ borderTop: `1px solid ${T.border}`, padding: '10px 14px', background: `${accentColor}0a` }}>
           {reqState === 'pending' || reqState === 'approved' ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#15803D', fontWeight: 600 }}>
               <Check size={14} />
@@ -222,7 +238,7 @@ function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, request
                 <p style={{ fontSize: 11, color: '#B91C1C', background: '#FEE2E2', padding: '6px 10px', borderRadius: 8, margin: '0 0 8px' }}>{joinError}</p>
               )}
               <button onClick={onOpenRequest}
-                style={{ width: '100%', height: 36, borderRadius: 18, border: `1.5px solid ${cat.headerBg}`, background: `${cat.headerBg}12`, color: cat.headerBg, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                style={{ width: '100%', height: 36, borderRadius: 18, border: `1.5px solid ${accentColor}`, background: `${accentColor}18`, color: accentColor, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <Send size={13} />
                 {room.category === 'pasabuy' ? 'Apply as Agent' : 'Request to Join'}
               </button>
@@ -273,6 +289,8 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
   const [requestStates, setRequestStates] = useState<Record<string, string>>({});
   const [requestMsg, setRequestMsg] = useState('');
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [detailRoomId, setDetailRoomId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
@@ -578,6 +596,7 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
                   onOpenRequest={() => { checkRequestStatus(room.id); setRequestingId(room.id); }}
                   onSendRequest={() => handleRequestJoin(room.id, room.name)}
                   onCancelRequest={() => { setRequestingId(null); setRequestMsg(''); setJoinError(prev => ({ ...prev, [room.id]: '' })); }}
+                  onOpenDetail={() => setDetailRoomId(room.id)}
                 />
               ))
             )}
@@ -588,7 +607,6 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
       {/* ── Map picker dialog ── */}
       {mapDialogOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', padding: '20px' }}
-          onClick={e => { if (e.target === e.currentTarget) setMapDialogOpen(false); }}
         >
           <div style={{ width: '100%', maxWidth: 580, background: T.bg, borderRadius: 20, border: `2px solid ${T.border}`, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 40px)', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
             {/* Dialog header */}
@@ -675,6 +693,145 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
           </div>
         </div>
       )}
+
+      {/* ── Room Detail Dialog ── */}
+      {detailRoomId && (() => {
+        const dr = rooms.find(r => r.id === detailRoomId);
+        if (!dr) return null;
+        const cat = CAT_STYLE[dr.category] ?? CAT_STYLE.rotary;
+        const isDarkSurface = parseInt(T.surface.replace('#', '').slice(0, 2), 16) < 100;
+        const accentColor = isDarkSurface ? cat.headerText : cat.headerBg;
+        const fill = Math.min((dr.member_count / dr.max_members) * 100, 100);
+        const eventDisplay = dr.event_date ? formatEventDate(dr.event_date) : dr.next_event;
+        const hasItinerary = dr.itinerary && dr.itinerary.length > 0;
+        const isItinExpanded = expandedId === dr.id;
+        const socials = [
+          dr.facebook_url  && { url: dr.facebook_url,  Icon: FacebookIcon,  color: '#1877F2' },
+          dr.instagram_url && { url: dr.instagram_url, Icon: InstagramIcon, color: '#E4405F' },
+          dr.twitter_url   && { url: dr.twitter_url,   Icon: TwitterIcon,   color: '#1DA1F2' },
+          ...(dr.other_socials ?? []).filter(s => s.url).map(s => ({ url: s.url, Icon: null, label: s.label, color: accentColor })),
+        ].filter(Boolean) as { url: string; Icon: any; color: string; label?: string }[];
+
+        return (
+          <div
+            onMouseDown={e => { if (e.target === e.currentTarget) (e.currentTarget as HTMLDivElement).dataset.dismissing = '1'; }}
+            onMouseUp={e => { if (e.target === e.currentTarget && (e.currentTarget as HTMLDivElement).dataset.dismissing === '1') setDetailRoomId(null); (e.currentTarget as HTMLDivElement).dataset.dismissing = ''; }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', fontFamily: '"DM Sans", system-ui, sans-serif' }}
+          >
+            <div style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', background: T.surface, borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
+
+              {/* Header */}
+              <div style={{ padding: '18px 20px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 11, fontFamily: '"VT323", monospace', color: accentColor, margin: '0 0 2px', letterSpacing: 1 }}>
+                    {dr.category === 'gaming' ? 'GAMING LOBBY' : dr.category === 'cafe' ? 'CAFE HANGOUT' : dr.category === 'pasabuy' ? 'PASABUY REQUEST' : 'ROTARY ROOM'}
+                  </p>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: '0 0 6px', lineHeight: 1.2, fontFamily: '"Bricolage Grotesque", serif', letterSpacing: '-0.02em' }}>{dr.name}</h2>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {dr.status === 'confirmed' && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
+                    {dr.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
+                    {dr.is_private && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: T.surfaceAlt, color: T.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} /> PRIVATE</span>}
+                    {dr.user_id === userId && <span style={{ fontSize: 10, fontWeight: 700, background: accentColor, color: isDarkSurface ? '#0a0a0a' : '#fff', padding: '2px 8px', borderRadius: 8 }}>YOUR ROOM</span>}
+                  </div>
+                </div>
+                <button onClick={() => setDetailRoomId(null)} style={{ width: 36, height: 36, borderRadius: '50%', background: T.surfaceAlt, border: `1.5px solid ${T.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textMuted, flexShrink: 0 }}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              <p style={{ padding: '10px 20px 0', fontSize: 13, color: T.textMuted, margin: 0 }}>
+                Hosted by <strong style={{ color: T.text }}>{dr.host_name}</strong>
+              </p>
+
+              {/* Quick chips */}
+              {(dr.game_name || eventDisplay || dr.location_name) && (
+                <div style={{ padding: '10px 20px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {dr.game_name && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 14 }}>🎮</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{dr.game_name}</span>
+                    </div>
+                  )}
+                  {eventDisplay && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 14 }}>📅</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{eventDisplay}</span>
+                    </div>
+                  )}
+                  {dr.location_name && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                      <MapPin size={13} style={{ color: accentColor, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{dr.location_name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Members bar */}
+              <div style={{ margin: '14px 20px 0', padding: '14px', background: T.surfaceAlt, borderRadius: 16, border: `1px solid ${T.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                    <Users size={13} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                    {dr.category === 'gaming' ? 'Players' : dr.category === 'cafe' ? 'Guests' : dr.category === 'pasabuy' ? 'Agents' : 'Members'}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>{dr.member_count} / {dr.max_members}</span>
+                </div>
+                <div style={{ height: 6, background: T.surface, borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: accentColor, transition: 'width 600ms' }} />
+                </div>
+              </div>
+
+              {/* Description */}
+              {dr.description && (
+                <div style={{ margin: '14px 20px 0', padding: '14px', background: T.surfaceAlt, borderRadius: 16, border: `1px solid ${T.border}` }}>
+                  <pre style={{ fontSize: 13, color: T.text, margin: 0, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{dr.description}</pre>
+                </div>
+              )}
+
+              {/* Social links */}
+              {socials.length > 0 && (
+                <div style={{ padding: '14px 20px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {socials.map((s, i) => s.Icon
+                    ? <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ width: 36, height: 36, borderRadius: 10, background: `${s.color}18`, border: `1px solid ${s.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}><s.Icon size={16} color={s.color} /></a>
+                    : <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ padding: '6px 12px', borderRadius: 10, background: `${accentColor}12`, border: `1px solid ${accentColor}33`, display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 600, color: accentColor, textDecoration: 'none', gap: 4 }}>🔗 {s.label || 'Link'}</a>
+                  )}
+                </div>
+              )}
+
+              {/* Itinerary (Rotary only) */}
+              {hasItinerary && (
+                <div style={{ margin: '14px 20px 0', borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setExpandedId(isItinExpanded ? null : dr.id)}
+                    style={{ width: '100%', padding: '12px 16px', background: T.surfaceAlt, border: 'none', borderBottom: isItinExpanded ? `1px solid ${T.border}` : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: 'inherit' }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>📋 Itinerary ({dr.itinerary.length} steps)</span>
+                    {isItinExpanded ? <ChevronUp size={14} style={{ color: T.textMuted }} /> : <ChevronDown size={14} style={{ color: T.textMuted }} />}
+                  </button>
+                  {isItinExpanded && (
+                    <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {dr.itinerary.map((item, idx) => (
+                        <div key={item.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${accentColor}18`, border: `1.5px solid ${accentColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: accentColor, flexShrink: 0 }}>{idx + 1}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {item.time && <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 600 }}>{item.time}</span>}
+                              <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{item.title}</span>
+                            </div>
+                            {item.description && <p style={{ fontSize: 12, color: T.textMuted, margin: '2px 0 0', lineHeight: 1.4 }}>{item.description}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ height: 32 }} />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

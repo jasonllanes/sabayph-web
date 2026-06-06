@@ -28,11 +28,16 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
   const [pwError, setPwError] = useState('');
   const [joining, setJoining] = useState(false);
   const [joined, setJoined] = useState(false);
+  const [isHost, setIsHost] = useState(false);
 
   useEffect(() => {
-    fetchRoomByCode(joinCode).then(r => {
+    fetchRoomByCode(joinCode).then(async r => {
       setRoom(r);
       setNotFound(!r);
+      if (r) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id === r.user_id) setIsHost(true);
+      }
       setFetching(false);
     });
   }, [joinCode]);
@@ -100,6 +105,20 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
             </div>
           )}
 
+          {/* Host state */}
+          {!fetching && isHost && (
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>👑</div>
+              <h3 className="font-display" style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: '0 0 8px' }}>You're the host!</h3>
+              <p style={{ fontSize: 14, color: T.textMuted, margin: '0 0 20px' }}>
+                You created <strong style={{ color: T.text }}>{room?.name}</strong>. You're already in this room.
+              </p>
+              <button onClick={onClose} style={{ padding: '10px 24px', borderRadius: 24, border: 'none', background: T.primary, color: T.bg, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
+                Got it
+              </button>
+            </div>
+          )}
+
           {/* Joined success */}
           {joined && (
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
@@ -112,7 +131,7 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
           )}
 
           {/* Room details */}
-          {!fetching && room && !joined && (
+          {!fetching && room && !joined && !isHost && (
             <>
               <div style={{ background: T.surfaceAlt, borderRadius: 16, padding: 16, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>

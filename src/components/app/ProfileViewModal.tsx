@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { X, MapPin, Star, ShieldCheck, Shield, ShieldAlert, UserPlus, UserCheck, Clock, Check, UserX, Phone, Navigation, CreditCard } from 'lucide-react';
+import { X, MapPin, Star, ShieldCheck, Shield, ShieldAlert, UserPlus, UserCheck, Clock, Check, UserX, Phone, Navigation, CreditCard, Flag } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import type { Theme, DiscoverProfile, ConnectionStatus, Connection } from '@/types';
 import { PRONOUNS, INTEREST_TAGS, OTHERS_PALETTE, tagStyle, getDefaultAvatar } from '@/components/app/tagConstants';
 
 // ── Badge helpers ───────────────────────────────────────────────────────────
 
 const VERIFY_STEPS = [
-  { key: 'profile',  label: 'Profile complete', Icon: ShieldCheck },
-  { key: 'phone',    label: 'Phone added',       Icon: Phone },
-  { key: 'location', label: 'Location pinned',   Icon: Navigation },
-  { key: 'id',       label: 'ID verified',        Icon: CreditCard },
+  { key: 'profile', label: 'Profile complete', Icon: ShieldCheck },
+  { key: 'phone', label: 'Phone added', Icon: Phone },
+  { key: 'location', label: 'Location pinned', Icon: Navigation },
+  { key: 'id', label: 'ID verified', Icon: CreditCard },
 ] as const;
 
 function getVerifyCount(p: DiscoverProfile) {
@@ -27,10 +28,10 @@ function getVerifySteps(p: DiscoverProfile) {
 
 function profileBadge(p: DiscoverProfile) {
   const count = getVerifyCount(p);
-  if (count === 4) return { label: 'Fully verified',    color: '#15803D', bg: '#DCFCE7', border: '#86EFAC', Icon: ShieldCheck };
-  if (count >= 2)  return { label: 'Partially verified', color: '#A16207', bg: '#FEF9C3', border: '#FDE047', Icon: Shield };
-  if (count === 1) return { label: 'Getting started',   color: '#C2410C', bg: '#FFEDD5', border: '#FDBA74', Icon: ShieldAlert };
-  return                  { label: 'Not yet verified',  color: '#6B7280', bg: '#F3F4F6', border: '#D1D5DB', Icon: ShieldAlert };
+  if (count === 4) return { label: 'Fully verified', color: '#15803D', bg: '#DCFCE7', border: '#86EFAC', Icon: ShieldCheck };
+  if (count >= 2) return { label: 'Partially verified', color: '#A16207', bg: '#FEF9C3', border: '#FDE047', Icon: Shield };
+  if (count === 1) return { label: 'Getting started', color: '#C2410C', bg: '#FFEDD5', border: '#FDBA74', Icon: ShieldAlert };
+  return { label: 'Not yet verified', color: '#6B7280', bg: '#F3F4F6', border: '#D1D5DB', Icon: ShieldAlert };
 }
 
 // ── Connect button ──────────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ function ConnectButton({ status, loading, connection, onSend, onAccept, onRemove
   };
   if (status === 'accepted') {
     return (
-      <button onClick={onRemove} disabled={loading} style={{ ...base, background: '#DCFCE7', color: '#15803D', border: '2px solid #86EFAC' }}>
+      <button onClick={onRemove} className='p-4' disabled={loading} style={{ ...base, background: '#DCFCE7', color: '#15803D', border: '2px solid #86EFAC' }}>
         <UserCheck size={17} /> Kasama na!
       </button>
     );
@@ -88,9 +89,19 @@ function ConnectButton({ status, loading, connection, onSend, onAccept, onRemove
 
 // ── Modal ───────────────────────────────────────────────────────────────────
 
+const REPORT_REASONS = [
+  'Fake or impersonation account',
+  'Inappropriate or offensive content',
+  'Harassment or bullying',
+  'Spam or scam',
+  'Suspicious activity',
+  'Other',
+];
+
 interface ProfileViewModalProps {
   person: DiscoverProfile;
   theme: Theme;
+  currentUserId?: string;
   connectionStatus: ConnectionStatus;
   connectionLoading: boolean;
   connectionError: string | null;
@@ -103,7 +114,7 @@ interface ProfileViewModalProps {
 }
 
 export default function ProfileViewModal({
-  person, theme: T, connectionStatus, connectionLoading, connectionError, tableReady,
+  person, theme: T, currentUserId, connectionStatus, connectionLoading, connectionError, tableReady,
   connection, onSendRequest, onAcceptRequest, onRemoveConnection, onClose,
 }: ProfileViewModalProps) {
   const badge = profileBadge(person);
@@ -111,7 +122,27 @@ export default function ProfileViewModal({
   const tags = person.profile_tags ?? [];
   const ratingDisplay = person.kasama_rating != null ? person.kasama_rating.toFixed(1) : '—';
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportDone, setReportDone] = useState(false);
   const avatarSrc = person.avatar_url || getDefaultAvatar(person.gender, person.profile_tags);
+
+  const handleSubmitReport = async () => {
+    if (!reportReason) return;
+    setReportSubmitting(true);
+    await supabase.from('reports').insert({
+      reporter_id: currentUserId ?? null,
+      reported_user_id: person.id,
+      reason: reportReason,
+      details: reportDetails.trim() || null,
+      status: 'pending',
+    });
+    setReportSubmitting(false);
+    setReportDone(true);
+    setTimeout(() => { setReportOpen(false); setReportDone(false); setReportReason(''); setReportDetails(''); }, 2500);
+  };
 
   // Pronouns are the first matching pronoun tag
   const pronounTag = tags.find(t => PRONOUNS.some(p => p.label === t));
@@ -119,7 +150,8 @@ export default function ProfileViewModal({
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={e => { if (e.target === e.currentTarget) (e.currentTarget as HTMLDivElement).dataset.dismissing = '1'; }}
+      onMouseUp={e => { if (e.target === e.currentTarget && (e.currentTarget as HTMLDivElement).dataset.dismissing === '1') onClose(); (e.currentTarget as HTMLDivElement).dataset.dismissing = ''; }}
     >
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=DM+Sans:wght@400;500;700&family=VT323&display=swap'); .font-display{font-family:'Bricolage Grotesque',serif;letter-spacing:-0.02em;} .font-pixel{font-family:'VT323',monospace;}`}</style>
 
@@ -330,15 +362,64 @@ export default function ProfileViewModal({
               {connectionError}
             </p>
           )}
-          <ConnectButton
-            status={connectionStatus}
-            loading={connectionLoading || tableReady === false}
-            connection={connection}
-            onSend={onSendRequest}
-            onAccept={onAcceptRequest}
-            onRemove={onRemoveConnection}
-            T={T}
-          />
+
+          {/* Report form */}
+          {reportOpen && (
+            <div style={{ marginBottom: 12, padding: 14, background: T.surfaceAlt, borderRadius: 14, border: `1.5px solid ${T.border}` }}>
+              {reportDone ? (
+                <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: '#15803D', margin: 0 }}>✅ Report submitted. Thank you.</p>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <p style={{ fontSize: 12, fontWeight: 800, color: T.text, margin: 0 }}>Report this account</p>
+                    <button onClick={() => setReportOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex' }}><X size={14} /></button>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                    {REPORT_REASONS.map(r => (
+                      <button key={r} onClick={() => setReportReason(r)}
+                        style={{ padding: '7px 12px', borderRadius: 10, fontSize: 12, fontWeight: 600, border: `1.5px solid ${reportReason === r ? T.primary : T.border}`, background: reportReason === r ? `${T.primary}14` : T.bg, color: reportReason === r ? T.primary : T.text, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'all 150ms' }}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    value={reportDetails}
+                    onChange={e => setReportDetails(e.target.value)}
+                    placeholder="Additional details (optional)"
+                    rows={2}
+                    style={{ width: '100%', padding: '8px 10px', fontSize: 12, fontFamily: 'inherit', border: `1.5px solid ${T.border}`, borderRadius: 8, background: T.bg, color: T.text, outline: 'none', resize: 'none', boxSizing: 'border-box', marginBottom: 8 }}
+                  />
+                  <button onClick={handleSubmitReport} disabled={!reportReason || reportSubmitting}
+                    style={{ width: '100%', height: 38, borderRadius: 19, border: 'none', background: reportReason ? '#C82718' : T.border, color: reportReason ? '#fff' : T.textMuted, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: reportReason ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    {reportSubmitting ? 'Submitting…' : <><Flag size={13} /> Submit Report</>}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <ConnectButton
+              status={connectionStatus}
+              loading={connectionLoading || tableReady === false}
+              connection={connection}
+              onSend={onSendRequest}
+              onAccept={onAcceptRequest}
+              onRemove={onRemoveConnection}
+              T={T}
+            />
+            {currentUserId && currentUserId !== person.id && (
+              <button
+                onClick={() => setReportOpen(o => !o)}
+                title="Report account"
+                style={{ width: 46, height: 46, borderRadius: 23, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, transition: 'all 150ms' }}
+              >
+                <Flag size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

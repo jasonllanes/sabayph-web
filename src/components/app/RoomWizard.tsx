@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { X, ChevronLeft, ChevronRight, Plus, Trash2, Check, Lock, Unlock, Copy, Share2, MapPin, Calendar, Users, Link } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Plus, Trash2, Check, Lock, Unlock, Copy, Share2, MapPin, Calendar, Clock, Users, Link } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
 import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import { supabase } from '@/lib/supabase';
@@ -30,6 +30,7 @@ export interface WizardData {
 interface RoomWizardProps {
   theme: Theme;
   editing: Room | null;
+  initialCategory?: string;
   userId: string | undefined;
   onClose: () => void;
   onCreate: (data: WizardData) => Promise<{ error: string | null; room: Room | null }>;
@@ -56,6 +57,7 @@ function makeDefault(): WizardData {
 
 const GAMES: { name: string; idLabel: string; placeholder: string }[] = [
   { name: 'Mobile Legends: Bang Bang', idLabel: 'ML Player ID',        placeholder: 'e.g. 123456789 (1234)' },
+  { name: 'Honor of Kings',            idLabel: 'HOK Player ID',        placeholder: 'e.g. 123456789' },
   { name: 'Valorant',                  idLabel: 'Riot ID',              placeholder: 'e.g. PlayerName#1234' },
   { name: 'Dota 2',                    idLabel: 'Steam Friend Code',    placeholder: 'e.g. 1234567890' },
   { name: 'League of Legends',         idLabel: 'Summoner Name',        placeholder: 'e.g. SummonerName' },
@@ -70,15 +72,13 @@ const GAMES: { name: string; idLabel: string; placeholder: string }[] = [
   { name: 'Other',                     idLabel: 'Game Username / ID',   placeholder: 'Your in-game ID' },
 ];
 
-const STEPS = ['Info', 'Schedule', 'Itinerary', 'Access', 'Socials'];
-
 // ─── Step indicator ───────────────────────────────────────────────────────────
 
-function StepBar({ current, total, theme: T }: { current: number; total: number; theme: Theme }) {
+function StepBar({ current, steps, theme: T }: { current: number; steps: string[]; theme: Theme }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: 24 }}>
-      {STEPS.map((label, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < total - 1 ? 1 : 'none' }}>
+      {steps.map((label, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < steps.length - 1 ? 1 : 'none' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
             <div style={{
               width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -94,7 +94,7 @@ function StepBar({ current, total, theme: T }: { current: number; total: number;
               {label.toUpperCase()}
             </span>
           </div>
-          {i < total - 1 && (
+          {i < steps.length - 1 && (
             <div style={{ flex: 1, height: 2, background: i < current ? T.primary : T.border, margin: '0 4px', marginBottom: 18, transition: 'background 300ms ease' }} />
           )}
         </div>
@@ -123,11 +123,17 @@ const makeStyles = (T: Theme) => ({
 function Step1({ data, set, T, nameRef, hostRef }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme; nameRef?: React.RefObject<HTMLInputElement | null>; hostRef?: React.RefObject<HTMLInputElement | null> }) {
   const { inp, lbl } = makeStyles(T);
   const reqStar = <span style={{ color: '#C82718', marginLeft: 2 }}>*</span>;
+  const roomNameLabel = data.category === 'gaming' ? 'GAMING ROOM NAME'
+    : data.category === 'cafe' ? 'CAFE ROOM NAME'
+    : 'ROTARY ROOM NAME';
+  const roomNamePlaceholder = data.category === 'gaming' ? 'e.g. Friday Night Valorant Squad'
+    : data.category === 'cafe' ? 'e.g. Sunday Coffee at Bo\'s'
+    : 'e.g. Davao Rotary District 3860';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
-        <label style={lbl}>ROOM NAME {reqStar}</label>
-        <input ref={nameRef} style={{ ...inp, borderColor: !data.name.trim() ? '#FCA5A5' : inp.border as string }} value={data.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Davao Rotary District 3860" />
+        <label style={lbl}>{roomNameLabel} {reqStar}</label>
+        <input ref={nameRef} style={{ ...inp, borderColor: !data.name.trim() ? '#FCA5A5' : inp.border as string }} value={data.name} onChange={e => set('name', e.target.value)} placeholder={roomNamePlaceholder} />
         {!data.name.trim() && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Room name is required.</p>}
       </div>
       <div>
@@ -173,19 +179,53 @@ function Step2({ data, set, T }: { data: WizardData; set: <K extends keyof Wizar
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Date/time — always shown */}
-      <div>
-        <label style={lbl}>EVENT DATE & TIME</label>
-        <div style={{ position: 'relative' }}>
-          <Calendar size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: T.textMuted, pointerEvents: 'none' }} />
-          <input
-            style={{ ...inp, paddingLeft: 36, colorScheme: isDark(T.bg) ? 'dark' : 'light' }}
-            type="datetime-local"
-            value={data.event_date}
-            onChange={e => set('event_date', e.target.value)}
-          />
-        </div>
-      </div>
+      {/* Date + Time — split so each picker closes on selection, and past values are blocked */}
+      {(() => {
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        const selectedDate = data.event_date ? data.event_date.split('T')[0] : '';
+        const selectedTime = data.event_date ? (data.event_date.split('T')[1] ?? '') : '';
+        const isToday = selectedDate === todayStr;
+        return (
+          <div>
+            <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Calendar size={11} /> EVENT DATE & TIME <span style={{ color: '#C82718' }}>*</span>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div style={{ position: 'relative' }}>
+                <Calendar size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: T.textMuted, pointerEvents: 'none' }} />
+                <input
+                  style={{ ...inp, paddingLeft: 34, colorScheme: isDark(T.bg) ? 'dark' : 'light' }}
+                  type="date"
+                  min={todayStr}
+                  value={selectedDate}
+                  onChange={e => {
+                    const date = e.target.value;
+                    const time = (date === todayStr && selectedTime && selectedTime <= nowTimeStr)
+                      ? nowTimeStr : (selectedTime || '00:00');
+                    set('event_date', date ? `${date}T${time}` : '');
+                  }}
+                />
+              </div>
+              <div style={{ position: 'relative' }}>
+                <Clock size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: T.textMuted, pointerEvents: 'none' }} />
+                <input
+                  style={{ ...inp, paddingLeft: 34, colorScheme: isDark(T.bg) ? 'dark' : 'light' }}
+                  type="time"
+                  min={isToday ? nowTimeStr : undefined}
+                  value={selectedTime}
+                  onChange={e => {
+                    const time = e.target.value;
+                    const date = selectedDate || todayStr;
+                    set('event_date', time ? `${date}T${time}` : '');
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {isGaming ? (
         /* ── Gaming: game picker + dynamic ID field ── */
@@ -480,10 +520,10 @@ function SuccessScreen({ room, onClose, T }: { room: Room; onClose: () => void; 
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
 
-export default function RoomWizard({ theme: T, editing, userId, onClose, onCreate, onUpdate }: RoomWizardProps) {
+export default function RoomWizard({ theme: T, editing, initialCategory, userId, onClose, onCreate, onUpdate }: RoomWizardProps) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(() => {
-    if (!editing) return makeDefault();
+    if (!editing) return { ...makeDefault(), category: initialCategory ?? 'rotary' };
     return {
       name: editing.name, host_name: editing.host_name, description: editing.description ?? '',
       max_members: editing.max_members, status: editing.status, category: editing.category, member_count: editing.member_count,
@@ -503,6 +543,20 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
   const [error, setError] = useState('');
   const [createdRoom, setCreatedRoom] = useState<Room | null>(null);
 
+  const isRotary = data.category === 'rotary';
+  const isGaming = data.category === 'gaming';
+  const isCafe   = data.category === 'cafe';
+
+  // Itinerary step only exists for Rotary rooms
+  const STEPS_LIST = isRotary
+    ? ['Info', 'Schedule', 'Itinerary', 'Access', 'Socials']
+    : isGaming
+      ? ['Info', 'Game & Schedule', 'Access', 'Socials']
+      : ['Info', 'Schedule', 'Access', 'Socials'];
+
+  // Access step index differs by category
+  const accessStepIdx = isRotary ? 3 : 2;
+
   // Refs for focusing required fields on validation failure
   const nameRef     = useRef<HTMLInputElement>(null);
   const hostRef     = useRef<HTMLInputElement>(null);
@@ -516,10 +570,13 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
       if (!data.name.trim())      { setTimeout(() => nameRef.current?.focus(), 50); return 'Room name is required.'; }
       if (!data.host_name.trim()) { setTimeout(() => hostRef.current?.focus(), 50); return 'Host name is required.'; }
     }
-    if (step === 1 && data.category === 'gaming' && !data.game_name) {
+    if (step === 1 && !data.event_date) {
+      return 'Event date and time are required.';
+    }
+    if (step === 1 && isGaming && !data.game_name) {
       return 'Please choose a game for this lobby.';
     }
-    if (step === 3 && data.is_private && !data.password.trim()) {
+    if (step === accessStepIdx && data.is_private && !data.password.trim()) {
       setTimeout(() => passwordRef.current?.focus(), 50);
       return 'Enter a password for the private room.';
     }
@@ -529,7 +586,7 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
   const next = () => {
     const err = validate(); if (err) { setError(err); return; }
     setError('');
-    if (step < STEPS.length - 1) { setStep(s => s + 1); return; }
+    if (step < STEPS_LIST.length - 1) { setStep(s => s + 1); return; }
     handleSave();
   };
 
@@ -565,8 +622,7 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
   const stepProps = { data, set, T, nameRef, hostRef, passwordRef };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=VT323&display=swap'); .font-display{font-family:'Bricolage Grotesque',serif;letter-spacing:-0.02em;} .font-pixel{font-family:'VT323',monospace;}`}</style>
 
       <div style={{ width: '100%', maxWidth: 520, background: T.surface, borderRadius: 24, boxShadow: '0 24px 64px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column', maxHeight: '95vh' }}>
@@ -575,11 +631,15 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
             <div>
               <h2 className="font-display" style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: '0 0 2px' }}>
-                {createdRoom ? 'Room Ready!' : editing ? `Edit Room` : `New Room`}
+                {createdRoom
+                  ? (isGaming ? 'Lobby Ready!' : isCafe ? 'Hangout Ready!' : 'Room Ready!')
+                  : editing
+                    ? `Edit ${isGaming ? 'Lobby' : isCafe ? 'Hangout' : 'Room'}`
+                    : `New ${isGaming ? 'Lobby' : isCafe ? 'Hangout' : 'Room'}`}
               </h2>
               {!createdRoom && (
                 <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>
-                  {editing ? 'Update your room details' : `Step ${step + 1} of ${STEPS.length} — ${STEPS[step]}`}
+                  {editing ? 'Update your room details' : `Step ${step + 1} of ${STEPS_LIST.length} — ${STEPS_LIST[step]}`}
                 </p>
               )}
             </div>
@@ -587,7 +647,7 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
               <X size={16} />
             </button>
           </div>
-          {!createdRoom && <StepBar current={step} total={STEPS.length} theme={T} />}
+          {!createdRoom && <StepBar current={step} steps={STEPS_LIST} theme={T} />}
         </div>
 
         {/* Scrollable content */}
@@ -595,10 +655,10 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
           {createdRoom
             ? <SuccessScreen room={createdRoom} onClose={onClose} T={T} />
             : step === 0 ? <Step1 {...stepProps} />
-              : step === 1 ? <Step2 {...stepProps} />
-                : step === 2 ? <Step3 {...stepProps} />
-                  : step === 3 ? <Step4 {...stepProps} />
-                    : <Step5 {...stepProps} userId={userId} />
+            : step === 1 ? <Step2 {...stepProps} />
+            : isRotary && step === 2 ? <Step3 {...stepProps} />
+            : step === accessStepIdx ? <Step4 {...stepProps} />
+            : <Step5 {...stepProps} userId={userId} />
           }
         </div>
 
@@ -621,8 +681,8 @@ export default function RoomWizard({ theme: T, editing, userId, onClose, onCreat
                 disabled={saving}
                 style={{ flex: 1, height: 46, borderRadius: 23, border: 'none', background: saving ? T.border : T.primary, color: saving ? T.textMuted : T.bg, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
-                {saving ? 'Saving…' : step === STEPS.length - 1
-                  ? <>{editing ? 'Save Changes' : 'Create Room'} <Check size={16} /></>
+                {saving ? 'Saving…' : step === STEPS_LIST.length - 1
+                  ? <>{editing ? 'Save Changes' : isGaming ? 'Create Lobby' : isCafe ? 'Create Hangout' : 'Create Room'} <Check size={16} /></>
                   : <>Next <ChevronRight size={16} /></>}
               </button>
             </div>

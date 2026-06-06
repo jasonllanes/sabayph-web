@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, ShieldAlert } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { isAdmin } from '@/lib/admin';
+import AdminPanel from '@/components/admin/AdminPanel';
 import type { DiscoverProfile } from '@/types';
 import { useScreenSize } from '@/hooks/useScreenSize';
 import { useDarkMode } from '@/hooks/useDarkMode';
@@ -79,6 +81,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
     setActiveTab(tab);
     localStorage.setItem('sabayph_active_tab', tab);
   };
+  const [showAdmin, setShowAdmin] = useState(false);
   const [activeCategory, setActiveCategory] = useState<ThemeKey>('heritage');
   const [exploreCategory, setExploreCategory] = useState<import('@/types').CategoryId | null>(null);
   const { isMobile } = useScreenSize();
@@ -156,6 +159,16 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
     </button>
   ) : null;
 
+  const AdminButton = () => isAdmin(userEmail) ? (
+    <button
+      onClick={() => setShowAdmin(true)}
+      title="Admin Panel"
+      style={{ width: 34, height: 34, borderRadius: '50%', background: dark ? '#2A405A' : theme.surfaceAlt, border: `1.5px solid ${theme.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#C82718', transition: 'all 250ms ease', flexShrink: 0 }}
+    >
+      <ShieldAlert size={16} />
+    </button>
+  ) : null;
+
   const DarkToggle = () => (
     <button
       onClick={toggleDark}
@@ -208,6 +221,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AdminButton />
             <DarkToggle />
             <div
               style={{ width: 34, height: 34, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: `2px solid ${theme.border}`, overflow: 'hidden', position: 'relative', flexShrink: 0 }}
@@ -228,6 +242,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
         </div>
 
         <BottomNav activeTab={activeTab} onTabChange={handleTabChange} theme={theme} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} profileCompleted={!!profile?.profile_completed} />
+        {showAdmin && <AdminPanel userId={user?.id} userEmail={userEmail} onClose={() => setShowAdmin(false)} />}
       </div>
     );
   }
@@ -253,6 +268,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <AdminButton />
             <DarkToggle />
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontSize: 14, fontWeight: 700, color: theme.text, margin: 0 }}>{userName}</p>
@@ -281,6 +297,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
         <ProfileViewModal
           person={deepLinkProfile}
           theme={theme}
+          currentUserId={user?.id}
           connectionStatus={getStatus(deepLinkProfile.id)}
           connectionLoading={connLoading}
           connectionError={connError}
@@ -302,6 +319,9 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
           onClose={() => setDeepLinkProfile(null)}
         />
       )}
+
+      {/* Admin panel overlay */}
+      {showAdmin && <AdminPanel userId={user?.id} userEmail={userEmail} onClose={() => setShowAdmin(false)} />}
     </div>
   );
 }

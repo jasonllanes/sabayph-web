@@ -382,6 +382,7 @@ export default function FriendsTab({ theme: T, userId }: FriendsTabProps) {
         <ProfileViewModal
           person={viewingProfile}
           theme={T}
+          currentUserId={userId}
           connectionStatus={getStatus(viewingProfile.id)}
           connectionLoading={connLoading}
           connectionError={connError}
