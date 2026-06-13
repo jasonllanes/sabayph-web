@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { X, ChevronLeft, ChevronRight, Plus, Trash2, Check, Lock, Unlock, Copy, Share2, MapPin, Calendar, Clock, Users, Link } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Plus, Trash2, Check, Lock, Unlock, Copy, Share2, MapPin, Calendar, Clock, Users, Link, Phone } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
 import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import { supabase } from '@/lib/supabase';
@@ -44,7 +44,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 function makeDefault(): WizardData {
   return {
     name: '', host_name: '', description: '',
-    max_members: 20, status: 'soon', category: 'rotary', member_count: 1,
+    max_members: 20, status: 'live', category: 'rotary', member_count: 1,
     event_date: '', location: null,
     itinerary: [],
     is_private: false, password: '',
@@ -120,7 +120,7 @@ const makeStyles = (T: Theme) => ({
 
 // ─── Step 1: Info ─────────────────────────────────────────────────────────────
 
-function Step1({ data, set, T, nameRef, hostRef }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme; nameRef?: React.RefObject<HTMLInputElement | null>; hostRef?: React.RefObject<HTMLInputElement | null> }) {
+function Step1({ data, set, T, nameRef }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme; nameRef?: React.RefObject<HTMLInputElement | null> }) {
   const { inp, lbl } = makeStyles(T);
   const reqStar = <span style={{ color: '#C82718', marginLeft: 2 }}>*</span>;
   const roomNameLabel = data.category === 'gaming' ? 'GAMING ROOM NAME'
@@ -137,11 +137,6 @@ function Step1({ data, set, T, nameRef, hostRef }: { data: WizardData; set: <K e
         {!data.name.trim() && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Room name is required.</p>}
       </div>
       <div>
-        <label style={lbl}>HOST NAME {reqStar}</label>
-        <input ref={hostRef} style={{ ...inp, borderColor: !data.host_name.trim() ? '#FCA5A5' : inp.border as string }} value={data.host_name} onChange={e => set('host_name', e.target.value)} placeholder="e.g. PDG Liza Santos" />
-        {!data.host_name.trim() && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Host name is required.</p>}
-      </div>
-      <div>
         <label style={lbl}>DESCRIPTION</label>
         <textarea style={{ ...inp, height: 80, padding: '10px 14px', resize: 'vertical' }} value={data.description} onChange={e => set('description', e.target.value)} placeholder="What is this room about?" />
       </div>
@@ -153,14 +148,13 @@ function Step1({ data, set, T, nameRef, hostRef }: { data: WizardData; set: <K e
         <div>
           <label style={lbl}>STATUS</label>
           <select style={{ ...inp, cursor: 'pointer' }} value={data.status} onChange={e => set('status', e.target.value as 'live' | 'soon')}>
-            <option value="soon">Soon</option>
             <option value="live">Live</option>
+            <option value="soon">Soon</option>
           </select>
         </div>
       </div>
       <br />
     </div>
-
   );
 }
 
@@ -412,15 +406,37 @@ function Step5({ data, set, T, userId }: { data: WizardData; set: <K extends key
   const { inp, lbl } = makeStyles(T);
   const { profile } = useProfile(userId);
   const [profileApplied, setProfileApplied] = useState(false);
+  const [mobile, setMobile] = useState(() => {
+    const existing = data.other_socials.find(s => s.label === 'Mobile');
+    return existing?.url ?? '';
+  });
 
   useEffect(() => {
     if (profile && !profileApplied) {
       if (!data.facebook_url && profile.facebook_url) set('facebook_url', profile.facebook_url);
       if (!data.instagram_url && profile.instagram_url) set('instagram_url', profile.instagram_url);
       if (!data.twitter_url && profile.twitter_url) set('twitter_url', profile.twitter_url);
+      if (!mobile && profile.contact_phone) {
+        const phone = profile.contact_phone;
+        setMobile(phone);
+        set('other_socials', [
+          { id: 'mobile_0', label: 'Mobile', url: phone },
+          ...data.other_socials.filter(s => s.label !== 'Mobile'),
+        ]);
+      }
       setProfileApplied(true);
     }
   }, [profile, profileApplied]);
+
+  const updateMobile = (val: string) => {
+    setMobile(val);
+    const others = data.other_socials.filter(s => s.label !== 'Mobile');
+    if (val.trim()) {
+      set('other_socials', [{ id: 'mobile_0', label: 'Mobile', url: val }, ...others]);
+    } else {
+      set('other_socials', others);
+    }
+  };
 
   const addOther = () => set('other_socials', [...data.other_socials, { id: uid(), label: '', url: '' }]);
   const updateOther = (id: string, field: 'label' | 'url', val: string) =>
@@ -428,12 +444,34 @@ function Step5({ data, set, T, userId }: { data: WizardData; set: <K extends key
   const removeOther = (id: string) =>
     set('other_socials', data.other_socials.filter(s => s.id !== id));
 
+  const hasContact = data.facebook_url.trim() || data.instagram_url.trim() || data.twitter_url.trim() || mobile.trim();
+  const reqStar = <span style={{ color: '#C82718', marginLeft: 2 }}>*</span>;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <p style={{ fontSize: 12, color: T.textMuted, margin: 0, lineHeight: 1.5 }}>
-        Optional. Fields are auto-filled from your profile if you've set them.
+        A mobile number or at least one social media link is <strong style={{ color: T.text }}>required</strong> so members can reach you.
       </p>
 
+      {/* Mobile Number */}
+      <div>
+        <label style={lbl}>MOBILE NUMBER {reqStar}</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#10B98118', border: '1.5px solid #10B98144', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Phone size={16} color="#10B981" />
+          </div>
+          <input
+            style={{ ...inp, flex: 1, borderColor: !hasContact ? '#FCA5A5' : inp.border as string }}
+            value={mobile}
+            onChange={e => updateMobile(e.target.value)}
+            placeholder="+63 912 345 6789"
+            type="tel"
+          />
+        </div>
+        {!hasContact && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Required if no social media link is provided.</p>}
+      </div>
+
+      {/* Social links */}
       {[
         { key: 'facebook_url' as const, Icon: FacebookIcon, label: 'Facebook', ph: 'https://facebook.com/yourpage', color: '#1877F2' },
         { key: 'instagram_url' as const, Icon: InstagramIcon, label: 'Instagram', ph: 'https://instagram.com/yourhandle', color: '#E4405F' },
@@ -453,7 +491,7 @@ function Step5({ data, set, T, userId }: { data: WizardData; set: <K extends key
           <Link size={11} /> OTHER LINKS
         </label>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {data.other_socials.map((s) => (
+          {data.other_socials.filter(s => s.label !== 'Mobile').map((s) => (
             <div key={s.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input style={{ ...inp, width: 110, flex: 'none' }} value={s.label} onChange={e => updateOther(s.id, 'label', e.target.value)} placeholder="Label" />
               <input style={{ ...inp, flex: 1 }} value={s.url} onChange={e => updateOther(s.id, 'url', e.target.value)} placeholder="https://…" />
@@ -543,6 +581,14 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
   const [error, setError] = useState('');
   const [createdRoom, setCreatedRoom] = useState<Room | null>(null);
 
+  // Auto-populate host_name from the logged-in user's profile
+  const { profile: creatorProfile } = useProfile(userId);
+  useEffect(() => {
+    if (!editing && creatorProfile?.display_name && !data.host_name) {
+      setData(prev => ({ ...prev, host_name: creatorProfile.display_name! }));
+    }
+  }, [creatorProfile?.display_name, editing]);
+
   const isRotary = data.category === 'rotary';
   const isGaming = data.category === 'gaming';
   const isCafe   = data.category === 'cafe';
@@ -559,7 +605,6 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
 
   // Refs for focusing required fields on validation failure
   const nameRef     = useRef<HTMLInputElement>(null);
-  const hostRef     = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
   const set = <K extends keyof WizardData>(k: K, v: WizardData[K]) =>
@@ -567,8 +612,7 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
 
   const validate = (): string => {
     if (step === 0) {
-      if (!data.name.trim())      { setTimeout(() => nameRef.current?.focus(), 50); return 'Room name is required.'; }
-      if (!data.host_name.trim()) { setTimeout(() => hostRef.current?.focus(), 50); return 'Host name is required.'; }
+      if (!data.name.trim()) { setTimeout(() => nameRef.current?.focus(), 50); return 'Room name is required.'; }
     }
     if (step === 1 && !data.event_date) {
       return 'Event date and time are required.';
@@ -579,6 +623,12 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
     if (step === accessStepIdx && data.is_private && !data.password.trim()) {
       setTimeout(() => passwordRef.current?.focus(), 50);
       return 'Enter a password for the private room.';
+    }
+    if (step === STEPS_LIST.length - 1) {
+      const hasMobile = data.other_socials.some(s => s.label === 'Mobile' && s.url.trim());
+      if (!data.facebook_url.trim() && !data.instagram_url.trim() && !data.twitter_url.trim() && !hasMobile) {
+        return 'Please add at least one social media link or a mobile number so members can reach you.';
+      }
     }
     return '';
   };
@@ -619,7 +669,7 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
     }
   };
 
-  const stepProps = { data, set, T, nameRef, hostRef, passwordRef };
+  const stepProps = { data, set, T, nameRef, passwordRef };
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>

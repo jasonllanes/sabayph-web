@@ -76,7 +76,7 @@ export default function ShareProfileCard({
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9999,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: '20px',
+      padding: '16px',
     }}>
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       {/* Backdrop */}
@@ -87,11 +87,13 @@ export default function ShareProfileCard({
 
       {/* Dialog */}
       <div style={{
-        position: 'relative', width: '100%', maxWidth: 360,
+        position: 'relative', width: '100%', maxWidth: 340,
+        maxHeight: 'calc(100dvh - 80px)',
+        display: 'flex', flexDirection: 'column',
         background: T.bg,
-        borderRadius: 24,
-        border: `3px solid ${T.text}`,
-        boxShadow: `8px 8px 0 ${T.text}`,
+        borderRadius: 20,
+        border: `2.5px solid ${T.text}`,
+        boxShadow: `6px 6px 0 ${T.text}`,
         overflow: 'hidden',
         fontFamily: '"DM Sans", system-ui, sans-serif',
       }}>
@@ -99,24 +101,25 @@ export default function ShareProfileCard({
         <button
           onClick={onClose}
           style={{
-            position: 'absolute', top: 12, right: 12, zIndex: 10,
-            width: 32, height: 32, borderRadius: '50%',
+            position: 'absolute', top: 10, right: 10, zIndex: 10,
+            width: 28, height: 28, borderRadius: '50%',
             border: `1.5px solid ${T.border}`,
             background: T.surface,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', color: T.textMuted,
           }}
         >
-          <X size={16} />
+          <X size={14} />
         </button>
 
-        {/* Card content (what gets printed) */}
-        <div ref={cardRef}>
-          {/* Card header — tall cover area */}
+        {/* Card content (what gets printed) — scrollable on very small screens */}
+        <div ref={cardRef} style={{ overflowY: 'auto', flex: 1 }}>
+          {/* Card header */}
           <div style={{
-            background: T.primary, height: 150,
-            padding: '16px 16px 0',
+            background: T.primary, height: 100,
+            padding: '12px 14px 0',
             position: 'relative',
+            flexShrink: 0,
           }}>
             {/* Grid pattern */}
             <div style={{
@@ -127,32 +130,32 @@ export default function ShareProfileCard({
             }} />
             {/* Decorative circles */}
             <div style={{
-              position: 'absolute', bottom: -30, right: -30,
-              width: 120, height: 120, borderRadius: '50%',
+              position: 'absolute', bottom: -24, right: -24,
+              width: 90, height: 90, borderRadius: '50%',
               background: '#ffffff0d', pointerEvents: 'none',
             }} />
             <div style={{
-              position: 'absolute', bottom: 10, right: 30,
-              width: 60, height: 60, borderRadius: '50%',
+              position: 'absolute', bottom: 8, right: 26,
+              width: 44, height: 44, borderRadius: '50%',
               background: '#ffffff08', pointerEvents: 'none',
             }} />
             {/* Branding */}
             <div style={{
-              position: 'relative', display: 'flex', alignItems: 'center', gap: 7,
+              position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <img
                 src={IMG('sabayph_logo.png')}
                 alt="SabayPH"
-                style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover' }}
+                style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'cover' }}
               />
               <span style={{
-                fontFamily: '"Bricolage Grotesque", serif', fontSize: 15, fontWeight: 800,
+                fontFamily: '"Bricolage Grotesque", serif', fontSize: 14, fontWeight: 800,
                 color: '#fff', letterSpacing: '-0.02em',
               }}>
                 Sabay<span style={{ color: '#EEA64C' }}>PH</span>
               </span>
               <span style={{
-                fontFamily: '"VT323", monospace', fontSize: 11, color: '#ffffff88',
+                fontFamily: '"VT323", monospace', fontSize: 10, color: '#ffffff88',
                 letterSpacing: 1.5, marginLeft: 2,
               }}>
                 KASAMA CARD
@@ -160,24 +163,24 @@ export default function ShareProfileCard({
             </div>
           </div>
 
-          {/* Card body — avatar sits halfway across the header/body boundary */}
+          {/* Card body */}
           <div style={{
             background: T.surface,
-            padding: '0 24px 20px',
+            padding: '0 20px 16px',
             textAlign: 'center',
           }}>
-            {/* Avatar — pulled up so it straddles the boundary */}
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: -52, marginBottom: 14 }}>
+            {/* Avatar — straddles header/body boundary */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: -38, marginBottom: 10 }}>
               <div style={{
-                width: 96, height: 96, borderRadius: '50%',
-                border: `4px solid ${T.surface}`,
+                width: 76, height: 76, borderRadius: '50%',
+                border: `3px solid ${T.surface}`,
                 overflow: 'hidden', background: T.primary,
-                boxShadow: `0 4px 16px rgba(0,0,0,0.25)`,
+                boxShadow: `0 4px 12px rgba(0,0,0,0.25)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 position: 'relative',
               }}>
                 <span style={{
-                  fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 36,
+                  fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 28,
                   color: '#fff', position: 'absolute',
                 }}>
                   {displayName.charAt(0).toUpperCase()}
@@ -190,11 +193,12 @@ export default function ShareProfileCard({
                 />
               </div>
             </div>
+
             <h2
               className="font-display"
               style={{
                 fontFamily: '"Bricolage Grotesque", serif', letterSpacing: '-0.02em',
-                fontSize: 22, fontWeight: 800, color: T.text, margin: '0 0 4px',
+                fontSize: 18, fontWeight: 800, color: T.text, margin: '0 0 3px',
               }}
             >
               {displayName}
@@ -203,9 +207,9 @@ export default function ShareProfileCard({
             {location && (
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                gap: 4, fontSize: 13, color: T.textMuted, marginBottom: 8,
+                gap: 4, fontSize: 12, color: T.textMuted, marginBottom: 6,
               }}>
-                <MapPin size={12} />
+                <MapPin size={11} />
                 <span>{location}</span>
               </div>
             )}
@@ -213,10 +217,10 @@ export default function ShareProfileCard({
             {kasamaRating != null && (
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '3px 12px', borderRadius: 20,
+                padding: '2px 10px', borderRadius: 20,
                 background: '#FEF9C3', border: '1px solid #FDE047',
-                fontSize: 12, fontWeight: 700, color: '#A16207',
-                marginBottom: 12,
+                fontSize: 11, fontWeight: 700, color: '#A16207',
+                marginBottom: 8,
               }}>
                 ⭐ {kasamaRating.toFixed(1)} Kasama Rating
               </div>
@@ -225,57 +229,50 @@ export default function ShareProfileCard({
             {/* Kasama tag */}
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
-              padding: '6px 16px', borderRadius: 20,
+              padding: '4px 14px', borderRadius: 20,
               background: T.surfaceAlt ?? T.bg,
               border: `2px solid ${T.border}`,
-              fontSize: 15, fontWeight: 700, color: T.primary,
+              fontSize: 14, fontWeight: 700, color: T.primary,
               fontFamily: '"VT323", monospace', letterSpacing: 2,
-              margin: '0 0 16px',
+              margin: '0 0 12px',
             }}>
               {kasamaTag.toUpperCase()}
             </div>
 
             {/* QR code */}
-            <div style={{
-              display: 'flex', justifyContent: 'center', marginBottom: 12,
-            }}>
-              <div style={{
-                padding: 12, borderRadius: 16,
-                border: `2px solid ${T.border}`,
-                background: '#fff',
-                display: 'inline-flex',
-              }}>
-                <QRCodeSVG
-                  value={profileUrl}
-                  size={128}
-                  bgColor="#ffffff"
-                  fgColor={T.text}
-                  level="M"
-                  imageSettings={{
-                    src: IMG('sabayph_logo.png'),
-                    x: undefined, y: undefined,
-                    height: 24, width: 24,
-                    excavate: true,
-                  }}
-                />
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+              <QRCodeSVG
+                value={profileUrl}
+                size={104}
+                bgColor="transparent"
+                fgColor={T.text}
+                level="M"
+                imageSettings={{
+                  src: IMG('sabayph_logo.png'),
+                  x: undefined, y: undefined,
+                  height: 20, width: 20,
+                  excavate: true,
+                }}
+              />
             </div>
 
-            <p style={{ fontSize: 11, color: T.textMuted, margin: '0 0 4px' }}>
+            <p style={{ fontSize: 11, color: T.textMuted, margin: '0 0 2px' }}>
               Scan to view profile on SabayPH
             </p>
             <p style={{
-              fontSize: 10, color: T.textMuted,
+              fontSize: 9, color: T.textMuted,
               fontFamily: '"VT323", monospace', letterSpacing: 1, opacity: 0.6,
+              margin: 0,
             }}>
               https://sabayph-web.vercel.app/
             </p>
           </div>
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons — always visible, never scrolled away */}
         <div style={{
-          padding: '12px 20px 20px',
+          flexShrink: 0,
+          padding: '10px 16px 16px',
           background: T.bg,
           display: 'flex', gap: 10,
           borderTop: `1.5px solid ${T.border}`,
@@ -284,13 +281,13 @@ export default function ShareProfileCard({
             onClick={handleDownloadPng}
             disabled={downloading}
             style={{
-              flex: 1, height: 46, borderRadius: 23,
+              flex: 1, height: 42, borderRadius: 21,
               border: `2px solid ${T.border}`,
               background: T.surface,
-              color: T.text, fontSize: 14, fontWeight: 700,
+              color: T.text, fontSize: 13, fontWeight: 700,
               fontFamily: '"DM Sans", system-ui, sans-serif',
               cursor: downloading ? 'default' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               opacity: downloading ? 0.65 : 1,
               transition: 'background 150ms, opacity 150ms',
             }}
@@ -298,26 +295,26 @@ export default function ShareProfileCard({
             onMouseLeave={e => { e.currentTarget.style.background = T.surface; }}
           >
             {downloading
-              ? <><Loader size={15} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
-              : <><Download size={16} /> Save as PNG</>
+              ? <><Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</>
+              : <><Download size={14} /> Save as PNG</>
             }
           </button>
           <button
             onClick={handleShare}
             style={{
-              flex: 1, height: 46, borderRadius: 23, border: 'none',
+              flex: 1, height: 42, borderRadius: 21, border: 'none',
               background: T.primary,
-              color: '#fff', fontSize: 14, fontWeight: 700,
+              color: '#fff', fontSize: 13, fontWeight: 700,
               fontFamily: '"DM Sans", system-ui, sans-serif',
               cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               boxShadow: `0 4px 14px ${T.primary}44`,
               transition: 'opacity 150ms',
             }}
             onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
             onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
           >
-            <Share2 size={16} /> Share
+            <Share2 size={14} /> Share
           </button>
         </div>
       </div>

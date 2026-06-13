@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { ArrowRight, ChevronLeft, Users, Shield, Sparkles } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
+import { useScreenSize } from '@/hooks/useScreenSize';
 
 interface OnboardingPage {
   bg: string; surface: string; primary: string; accent: string;
@@ -67,6 +68,7 @@ const FONTS = `
 function MobileOnboarding({ onDone }: { onDone: () => void }) {
   const [page, setPage] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
+  const touchStartX = useRef<number | null>(null);
   const p = PAGES[page];
   const isLast = page === PAGES.length - 1;
 
@@ -118,7 +120,7 @@ function MobileOnboarding({ onDone }: { onDone: () => void }) {
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '16px 24px 0' }}>
         {!isLast && (
           <button
-            onClick={finish}
+            onClick={onDone}
             style={{ fontSize: 13, color: p.textMuted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
           >
             Skip
@@ -214,6 +216,114 @@ function MobileOnboarding({ onDone }: { onDone: () => void }) {
               <>Continue <ArrowRight size={18} /></>
             )}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DESKTOP ONBOARDING ──────────────────────────────────────────────────────
+
+function DesktopOnboarding({ onDone }: { onDone: () => void }) {
+  const [page, setPage] = useState(0);
+  const [transitioning, setTransitioning] = useState(false);
+  const p = PAGES[page];
+  const isLast = page === PAGES.length - 1;
+
+  const go = (next: number) => {
+    if (next < 0 || next >= PAGES.length || transitioning) return;
+    setTransitioning(true);
+    setTimeout(() => { setPage(next); setTransitioning(false); }, 220);
+  };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(12px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <style>{FONTS}</style>
+      <div style={{
+        width: '100%', maxWidth: 800, borderRadius: 28, overflow: 'hidden',
+        border: `3px solid ${p.text}`, boxShadow: `10px 10px 0 ${p.text}`,
+        display: 'flex', transition: 'border-color 400ms, box-shadow 400ms',
+      }}>
+        {/* Left: visual */}
+        <div style={{
+          flex: '0 0 280px', background: p.bg,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '40px 32px', gap: 20,
+          transition: 'background 400ms',
+        }}>
+          <div style={{
+            width: 190, height: 190, borderRadius: 20,
+            background: p.surface, border: `2.5px solid ${p.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+          }}>
+            <img
+              src={p.image} alt=""
+              style={{ width: '80%', height: '80%', objectFit: 'contain', opacity: transitioning ? 0 : 1, transition: 'opacity 220ms' }}
+            />
+          </div>
+          <p className="font-pixel" style={{ fontSize: 15, color: p.accent, margin: 0, letterSpacing: 2, textAlign: 'center', opacity: transitioning ? 0 : 1, transition: 'opacity 220ms' }}>
+            {p.pixel}
+          </p>
+        </div>
+
+        {/* Right: content */}
+        <div style={{
+          flex: 1, background: p.surface, padding: '48px 40px',
+          display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          opacity: transitioning ? 0 : 1, transition: 'opacity 220ms',
+        }}>
+          <h2 className="font-display" style={{ fontSize: 28, fontWeight: 800, color: p.text, margin: '0 0 12px' }}>
+            {p.title}
+          </h2>
+          <p style={{ fontSize: 15, color: p.textMuted, margin: '0 0 32px', lineHeight: 1.7 }}>
+            {p.body}
+          </p>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 32 }}>
+            {PAGES.map((_, i) => (
+              <div
+                key={i} onClick={() => go(i)}
+                style={{ height: 8, cursor: 'pointer', width: i === page ? 28 : 8, borderRadius: 4, background: i === page ? p.primary : p.border, transition: 'all 300ms ease' }}
+              />
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {page > 0 && (
+              <button
+                onClick={() => go(page - 1)}
+                style={{ flex: '0 0 auto', height: 52, width: 52, borderRadius: '50%', border: `2px solid ${p.border}`, background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: p.text }}
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
+            {!isLast && (
+              <button
+                onClick={onDone}
+                style={{ height: 52, padding: '0 20px', borderRadius: 26, border: `2px solid ${p.border}`, background: 'transparent', color: p.textMuted, cursor: 'pointer', fontFamily: '"DM Sans", system-ui, sans-serif', fontSize: 15, fontWeight: 700 }}
+              >
+                Skip
+              </button>
+            )}
+            <button
+              onClick={isLast ? onDone : () => go(page + 1)}
+              style={{
+                flex: 1, height: 52, borderRadius: 26, border: 'none',
+                background: p.primary, color: p.bg, cursor: 'pointer',
+                fontFamily: '"DM Sans", system-ui, sans-serif', fontSize: 16, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                boxShadow: `0 4px 18px ${p.primary}50`,
+                transition: 'opacity 150ms, background 450ms ease',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.88')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+            >
+              {isLast ? <><PixelHeart color={p.bg} size={14} /> Tara, mag-explore!</> : <>Continue <ArrowRight size={18} /></>}
+            </button>
+          </div>
         </div>
       </div>
     </div>

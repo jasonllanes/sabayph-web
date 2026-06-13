@@ -27,7 +27,7 @@ function verifyBadge(p: DiscoverProfile) {
   return              { label: 'Not yet verified',   color: '#6B7280', bg: '#F3F4F6', border: '#D1D5DB', Icon: ShieldAlert };
 }
 
-function ApplicantProfileModal({ profile, theme: T, onClose }: { profile: DiscoverProfile; theme: Theme; onClose: () => void }) {
+function ApplicantProfileModal({ profile, theme: T, onClose, headerLabel = 'APPLICANT PROFILE' }: { profile: DiscoverProfile; theme: Theme; onClose: () => void; headerLabel?: string }) {
   const badge = verifyBadge(profile);
   const BadgeIcon = badge.Icon;
   const avatarSrc = profile.avatar_url || getDefaultAvatar(profile.gender, profile.profile_tags);
@@ -47,7 +47,7 @@ function ApplicantProfileModal({ profile, theme: T, onClose }: { profile: Discov
             <X size={15} />
           </button>
           <div style={{ position: 'absolute', top: 12, left: 14, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.85)', fontFamily: '"DM Sans",system-ui,sans-serif' }}>
-            APPLICANT PROFILE
+            {headerLabel}
           </div>
         </div>
 
@@ -158,7 +158,7 @@ function RoomsSkeletonList({ theme: T }: { theme: Theme }) {
   );
 }
 
-interface RoomsTabProps { theme: Theme; userId?: string; }
+interface RoomsTabProps { theme: Theme; userId?: string; userAvatarUrl?: string; }
 
 function formatEventDate(iso: string): string {
   return new Date(iso).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
@@ -176,14 +176,14 @@ function getRoomViewState(r: Room, now: Date): RoomViewState {
   return 'queuing';
 }
 
-const ROOM_STATE_META: Record<RoomViewState, { label: string; emoji: string }> = {
-  active:   { label: 'Active',   emoji: '🟢' },
-  queuing:  { label: 'Queuing',  emoji: '🟡' },
-  finished: { label: 'Finished', emoji: '✅' },
-  archived: { label: 'Archived', emoji: '📦' },
+const ROOM_STATE_META: Record<RoomViewState, { label: string }> = {
+  active:   { label: 'Active' },
+  queuing:  { label: 'Queuing' },
+  finished: { label: 'Finished' },
+  archived: { label: 'Archived' },
 };
 
-export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
+export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabProps) {
   const [categoryTab, setCategoryTab] = useState<RoomCategory>('rotary');
   const { rooms, loading, error, createRoom, updateRoom, deleteRoom } = useRooms(categoryTab, userId);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -207,12 +207,24 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
   const { requests, approveRequest, rejectRequest } = useRoomJoinRequests(ownedRoomIds);
 
   const [viewingApplicant, setViewingApplicant] = useState<DiscoverProfile | null>(null);
+  const [profileModalLabel, setProfileModalLabel] = useState('APPLICANT PROFILE');
 
   const handleViewApplicantProfile = async (applicantUserId: string) => {
+    setProfileModalLabel('APPLICANT PROFILE');
     const { data } = await supabase
       .from('profiles')
       .select('id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined, avatar_url, id_verified')
       .eq('id', applicantUserId)
+      .maybeSingle();
+    if (data) setViewingApplicant(data as DiscoverProfile);
+  };
+
+  const handleViewHostProfile = async (hostUserId: string) => {
+    setProfileModalLabel('HOST PROFILE');
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined, avatar_url, id_verified')
+      .eq('id', hostUserId)
       .maybeSingle();
     if (data) setViewingApplicant(data as DiscoverProfile);
   };
@@ -440,8 +452,7 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
             const count = stateMap[tab].length;
             return (
               <button key={tab} onClick={() => setRoomsView(tab)}
-                style={{ height: 52, borderRadius: 16, border: `2px solid ${sel ? TT.primary : TT.border}`, background: sel ? TT.primary : TT.surface, color: sel ? TT.bg : TT.textMuted, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, transition: 'all 200ms ease', padding: 0 }}>
-                <span style={{ fontSize: 15, lineHeight: 1 }}>{m.emoji}</span>
+                style={{ height: 44, borderRadius: 14, border: `2px solid ${sel ? TT.primary : TT.border}`, background: sel ? TT.primary : TT.surface, color: sel ? TT.bg : TT.textMuted, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, transition: 'all 200ms ease', padding: '0 4px' }}>
                 <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.2, lineHeight: 1 }}>{m.label}</span>
                 <span style={{ fontSize: 10, minWidth: 18, textAlign: 'center', padding: '0 5px', borderRadius: 10, background: sel ? 'rgba(255,255,255,0.22)' : TT.surfaceAlt, color: sel ? TT.bg : TT.textMuted, fontWeight: 700, lineHeight: '16px' }}>{count}</span>
               </button>
@@ -471,6 +482,29 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
                 onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 4px 16px ${TT.text}18`)}
                 onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
               >
+                {/* Host row */}
+                <div
+                  onClick={() => handleViewHostProfile(room.user_id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderBottom: `1px solid ${TT.border}`, cursor: 'pointer', background: 'transparent', transition: 'background 120ms' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = TT.surfaceAlt)}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: TT.primary, border: `1.5px solid ${TT.border}`, overflow: 'hidden', position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: TT.bg, position: 'absolute', fontFamily: '"Bricolage Grotesque",serif', zIndex: 0 }}>
+                      {(room.host_name || '?').charAt(0).toUpperCase()}
+                    </span>
+                    {isOwner && userAvatarUrl && (
+                      <img src={userAvatarUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    )}
+                  </div>
+                  <span style={{ fontSize: 12, color: TT.textMuted, fontWeight: 500 }}>
+                    {isOwner ? 'You' : room.host_name}
+                  </span>
+                  <span style={{ fontSize: 10, color: TT.textMuted, opacity: 0.5 }}>·</span>
+                  <span style={{ fontSize: 11, color: TT.primary, fontWeight: 600 }}>Host</span>
+                  <span style={{ fontSize: 10, color: TT.primary, marginLeft: 'auto', fontWeight: 600, opacity: 0.75 }}>View profile →</span>
+                </div>
+
                 {isPasaBuy ? (
                   /* Compact PasaBuy card — tap to open detail sheet */
                   <div
@@ -687,9 +721,6 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
 
       {!loading && displayRooms.length === 0 && !error && (
         <div style={{ textAlign: 'center', padding: '40px 20px', border: `2px dashed ${TT.border}`, borderRadius: 20 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>
-            {ROOM_STATE_META[roomsView].emoji}
-          </div>
           <p className="font-display" style={{ fontSize: 17, fontWeight: 700, color: TT.text, margin: '0 0 6px' }}>
             {roomsView === 'active'   && (categoryTab === 'pasabuy' ? 'No active requests.' : categoryTab === 'gaming' ? 'No active lobbies.' : categoryTab === 'cafe' ? 'No active hangouts.' : 'No active rooms yet.')}
             {roomsView === 'queuing'  && (categoryTab === 'pasabuy' ? 'No requests in queue.' : categoryTab === 'gaming' ? 'No lobbies waiting.' : categoryTab === 'cafe' ? 'No hangouts in queue.' : 'No rooms in queue.')}
@@ -1142,12 +1173,13 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
         />
       )}
 
-      {/* Applicant profile viewer */}
+      {/* Applicant / host profile viewer */}
       {viewingApplicant && (
         <ApplicantProfileModal
           profile={viewingApplicant}
           theme={activeTheme}
           onClose={() => setViewingApplicant(null)}
+          headerLabel={profileModalLabel}
         />
       )}
     </div>

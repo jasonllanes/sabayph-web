@@ -192,7 +192,7 @@ function badgeConfig(count: number) {
 function KasamaTagChip({ tag, T }: { tag: string; T: { primary: string; surfaceAlt: string; border: string; textMuted: string; text: string } }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    navigator.clipboard.writeText(tag);
+    navigator.clipboard.writeText(tag.toUpperCase());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

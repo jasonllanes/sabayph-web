@@ -2,35 +2,34 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 /*
-    Required Supabase setup — run once in SQL editor:
+    ── Initial stories table (already applied — skip if done) ───────────────────
 
-    create table if not exists public.stories (
-      id          uuid primary key default gen_random_uuid(),
-      user_id     uuid references auth.users(id) on delete cascade not null,
-      type        text check (type in ('photo', 'note')) not null,
-      media_url   text,
-      note_text   text,
-      theme_color text not null default '#043E81',
-      created_at  timestamptz not null default now(),
-      expires_at  timestamptz not null default (now() + interval '24 hours')
+    create table if not exists public.stories ( ... );
+    -- See git history for full DDL; skip if the table already exists.
+
+    ── story_views migration — run this once in Supabase SQL editor ─────────────
+
+    create table if not exists public.story_views (
+      id         uuid primary key default gen_random_uuid(),
+      story_id   uuid references public.stories(id) on delete cascade not null,
+      viewer_id  uuid references auth.users(id) on delete cascade not null,
+      viewed_at  timestamptz not null default now(),
+      unique(story_id, viewer_id)
     );
-    create index if not exists stories_expires_idx on public.stories (expires_at);
-    alter table public.stories enable row level security;
-    create policy "Read active stories" on public.stories
-      for select using (expires_at > now());
-    create policy "Manage own stories" on public.stories
-      for all using (auth.uid() = user_id);
+    alter table public.story_views enable row level security;
 
-    -- Storage bucket (create manually in Supabase dashboard: "story-media", public)
-    -- Then add policies:
-    create policy "Public read story media"
-      on storage.objects for select using (bucket_id = 'story-media');
-    create policy "Auth upload story media"
-      on storage.objects for insert
-      with check (bucket_id = 'story-media' and auth.role() = 'authenticated');
-    create policy "Auth delete own story media"
-      on storage.objects for delete
-      using (bucket_id = 'story-media' and auth.uid()::text = (storage.foldername(name))[1]);
+    do $$ begin
+      create policy "Record own view" on public.story_views
+        for insert with check (auth.uid() = viewer_id);
+    exception when duplicate_object then null; end $$;
+
+    do $$ begin
+      create policy "Story owner reads views" on public.story_views
+        for select using (
+          exists (select 1 from public.stories s where s.id = story_id and s.user_id = auth.uid())
+          or auth.uid() = viewer_id
+        );
+    exception when duplicate_object then null; end $$;
 */
 
 export interface Story {
@@ -44,6 +43,7 @@ export interface Story {
   expires_at: string;
   // joined from profiles
   display_name: string | null;
+  avatar_url: string | null;
   gender: string | null;
   profile_tags: string[] | null;
 }
@@ -105,7 +105,7 @@ export function useStories(userId?: string) {
       const { data, error } = await supabase
         .from('stories')
         .select(
-          'id, user_id, type, media_url, note_text, theme_color, created_at, expires_at, profiles!stories_user_id_fkey(display_name, gender, profile_tags)',
+          'id, user_id, type, media_url, note_text, theme_color, created_at, expires_at, profiles!stories_user_id_fkey(display_name, avatar_url, gender, profile_tags)',
         )
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
@@ -135,6 +135,7 @@ export function useStories(userId?: string) {
           created_at: s.created_at,
           expires_at: s.expires_at,
           display_name: (s.profiles as any)?.display_name ?? null,
+          avatar_url: (s.profiles as any)?.avatar_url ?? null,
           gender: (s.profiles as any)?.gender ?? null,
           profile_tags: (s.profiles as any)?.profile_tags ?? null,
         })),
@@ -245,6 +246,43 @@ export function useStories(userId?: string) {
     remove,
     refresh,
   };
+}
+
+// ── Story views ───────────────────────────────────────────────────────────────
+
+export interface StoryViewEntry {
+  viewer_id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  viewed_at: string;
+}
+
+export async function recordStoryView(storyId: string, viewerId: string): Promise<void> {
+  try {
+    await supabase
+      .from('story_views')
+      .upsert({ story_id: storyId, viewer_id: viewerId }, { onConflict: 'story_id,viewer_id' });
+  } catch { /* silently skip if table doesn't exist yet */ }
+}
+
+export async function fetchStoryViewers(storyId: string): Promise<StoryViewEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from('story_views')
+      .select('viewer_id, viewed_at, profiles!story_views_viewer_id_fkey(display_name, avatar_url)')
+      .eq('story_id', storyId)
+      .order('viewed_at', { ascending: false })
+      .limit(50);
+    if (error) return [];
+    return (data ?? []).map((v: any) => ({
+      viewer_id: v.viewer_id,
+      display_name: (v.profiles as any)?.display_name ?? null,
+      avatar_url: (v.profiles as any)?.avatar_url ?? null,
+      viewed_at: v.viewed_at,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // Group stories by user, preserving insertion order per user

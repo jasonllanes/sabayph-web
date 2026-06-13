@@ -185,8 +185,11 @@ export default function FriendsTab({ theme: T, userId }: FriendsTabProps) {
       );
       results = data.map(normProfile);
     } else {
+      const escaped = term.replace(/[%_]/g, '\\$&');
       const data = await safeSelectProfiles(cols =>
-        supabase.from('profiles').select(cols).ilike('display_name', `%${term}%`).neq('id', userId ?? '').limit(20)
+        supabase.from('profiles').select(cols)
+          .or(`display_name.ilike.%${escaped}%,kasama_tag.ilike.%${escaped}%`)
+          .neq('id', userId ?? '').limit(20)
       );
       results = data.map(normProfile);
     }

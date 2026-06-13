@@ -19,7 +19,9 @@ import ExploreTab from './ExploreTab';
 import ProfileTab from './ProfileTab';
 import FriendsTab from './FriendsTab';
 import MessagesTab from './MessagesTab';
+import NotificationsTab from './NotificationsTab';
 import { useUnreadCount } from '@/hooks/useMessages';
+import { useNotifications } from '@/hooks/useNotifications';
 import { usePendingFriendsCount, usePendingRoomsCount } from '@/hooks/useBadgeCounts';
 import { useAcceptedBookings } from '@/hooks/useRoomChat';
 import ProfileViewModal from './ProfileViewModal';
@@ -84,12 +86,13 @@ const GLOBAL_STYLE = `
 `;
 
 const TAB_LABELS: Record<TabId, string> = {
-  discover: 'Discover',
-  rooms:    'My Rooms',
-  explore:  'Explore',
-  friends:  'Friends',
-  messages: 'Messages',
-  profile:  'Profile',
+  discover:      'Discover',
+  rooms:         'My Rooms',
+  explore:       'Explore',
+  friends:       'Friends',
+  messages:      'Messages',
+  notifications: 'Notifications',
+  profile:       'Profile',
 };
 
 interface AppShellProps {
@@ -192,7 +195,7 @@ function ThemeModeSelector({
 export default function AppShell({ user, onLogout, initialProfileTag }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const saved = localStorage.getItem('sabayph_active_tab') as TabId | null;
-    const valid: TabId[] = ['discover', 'rooms', 'explore', 'friends', 'messages', 'profile'];
+    const valid: TabId[] = ['discover', 'rooms', 'explore', 'friends', 'messages', 'profile', 'notifications'];
     return saved && valid.includes(saved) ? saved : 'discover';
   });
 
@@ -225,6 +228,16 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
   const pendingFriends  = usePendingFriendsCount(user?.id);
   const pendingRooms    = usePendingRoomsCount(user?.id);
   const { bookings: acceptedBookings } = useAcceptedBookings(user?.id);
+  const {
+    notifications,
+    loading: notifLoading,
+    available: notifAvailable,
+    unreadCount: unreadNotifications,
+    markRead: markNotifRead,
+    markAllRead: markAllNotifRead,
+    remove: removeNotif,
+    clearAll: clearAllNotifs,
+  } = useNotifications(user?.id);
   const userEmail  = user?.email ?? user?.user_metadata?.email ?? 'kasama@sabayph.com';
   const googleName: string = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
   const userName   = profile?.display_name || googleName || userEmail.split('@')[0];
@@ -261,7 +274,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
     setActiveCategory(typeof val === 'function' ? val(activeCategory) : val);
   }, [activeCategory]);
 
-  // Persistent accepted-booking banner — shown to the courier who was accepted
+  // Persistent accepted-booking banner — shown to the member who was accepted into a room
   const BookingBanner = acceptedBookings.length > 0 ? (
     <button
       onClick={() => handleTabChange('messages')}
@@ -272,13 +285,13 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
         boxShadow: '0 2px 8px rgba(180,83,9,0.35)',
       }}
     >
-      <span style={{ fontSize: 20, flexShrink: 0 }}>📦</span>
+      <span style={{ fontSize: 20, flexShrink: 0 }}>🎉</span>
       <div style={{ flex: 1, textAlign: 'left' }}>
         <p style={{ fontSize: 12, fontWeight: 800, color: '#fff', margin: 0, letterSpacing: 0.2 }}>
-          You've been accepted as courier!
+          You've been accepted into a room!
         </p>
         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', margin: 0 }}>
-          {acceptedBookings[0].room_name} · {acceptedBookings[0].join_code} — tap to open tracking chat
+          {acceptedBookings[0].room_name} · {acceptedBookings[0].join_code} — tap to open group chat
         </p>
       </div>
       <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.22)', padding: '4px 10px', borderRadius: 10, flexShrink: 0 }}>
@@ -316,10 +329,23 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'rooms':    return <RoomsTab theme={theme} userId={user?.id} />;
-      case 'explore':  return <ExploreTab theme={theme} userId={user?.id} initialCategory={exploreCategory} />;
-      case 'friends':  return <FriendsTab theme={theme} userId={user?.id} />;
-      case 'messages': return <MessagesTab theme={theme} userId={user?.id} />;
+      case 'rooms':         return <RoomsTab theme={theme} userId={user?.id} userAvatarUrl={displayAvatar} />;
+      case 'explore':       return <ExploreTab theme={theme} userId={user?.id} initialCategory={exploreCategory} />;
+      case 'friends':       return <FriendsTab theme={theme} userId={user?.id} />;
+      case 'messages':      return <MessagesTab theme={theme} userId={user?.id} />;
+      case 'notifications': return (
+        <NotificationsTab
+          theme={theme}
+          notifications={notifications}
+          loading={notifLoading}
+          available={notifAvailable}
+          onMarkRead={markNotifRead}
+          onMarkAllRead={markAllNotifRead}
+          onRemove={removeNotif}
+          onClearAll={clearAllNotifs}
+          onNavigate={handleTabChange}
+        />
+      );
       case 'profile':  return (
         <ProfileTab
           theme={theme}
@@ -352,7 +378,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
       <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden', background: theme.bg, color: theme.text, fontFamily: '"DM Sans", system-ui, sans-serif', transition: 'background 600ms ease, color 600ms ease' }}>
         <style>{GLOBAL_STYLE}</style>
 
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: `${theme.bg}F0`, borderBottom: `1.5px solid ${theme.border}`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', transition: 'all 600ms ease' }}>
+        <div style={{ flexShrink: 0, position: 'relative', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: `${theme.bg}F0`, borderBottom: `1.5px solid ${theme.border}`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', transition: 'all 600ms ease' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png" alt="SabayPH" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', border: `2px solid ${theme.primary}` }} />
             <span className="font-display" style={{ fontSize: 18, fontWeight: 800, color: theme.text }}>
@@ -380,8 +406,8 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
           </div>
         </div>
 
-        <div data-bottomnav>
-          <BottomNav activeTab={activeTab} onTabChange={handleTabChange} theme={theme} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} profileCompleted={!!profile?.profile_completed} />
+        <div data-bottomnav style={{ position: 'relative', zIndex: 10 }}>
+          <BottomNav activeTab={activeTab} onTabChange={handleTabChange} theme={theme} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} unreadNotifications={unreadNotifications} profileCompleted={!!profile?.profile_completed} />
         </div>
         {showAdmin && <AdminPanel userId={user?.id} userEmail={userEmail} onClose={() => setShowAdmin(false)} />}
       </div>
@@ -392,7 +418,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
     <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: theme.bg, color: theme.text, fontFamily: '"DM Sans", system-ui, sans-serif', transition: 'background 600ms ease, color 600ms ease' }}>
       <style>{GLOBAL_STYLE}</style>
 
-      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} theme={theme} user={{ email: userEmail, name: userName, avatarUrl: displayAvatar, gender: profile?.gender }} onLogout={onLogout} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} profileCompleted={!!profile?.profile_completed} />
+      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} theme={theme} user={{ email: userEmail, name: userName, avatarUrl: displayAvatar, gender: profile?.gender }} onLogout={onLogout} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} unreadNotifications={unreadNotifications} profileCompleted={!!profile?.profile_completed} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', background: theme.surface, borderBottom: `1.5px solid ${theme.border}`, transition: 'all 600ms ease' }}>
@@ -402,9 +428,10 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
             </p>
             <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: theme.text, margin: 0 }}>
               {activeTab === 'discover' ? `Kamusta, ${userName}! 👋`
-                : activeTab === 'rooms'    ? 'Your Rooms'
-                : activeTab === 'explore'  ? 'Explore Activities'
-                : activeTab === 'messages' ? 'Messages'
+                : activeTab === 'rooms'         ? 'Your Rooms'
+                : activeTab === 'explore'       ? 'Explore Activities'
+                : activeTab === 'messages'      ? 'Messages'
+                : activeTab === 'notifications' ? 'Notifications'
                 : 'Your Profile'}
             </h1>
           </div>

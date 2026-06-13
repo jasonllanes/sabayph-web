@@ -1,4 +1,4 @@
-import { Compass, Users, Map, User, Heart, MessageSquare, LogOut, Lock } from 'lucide-react';
+import { Compass, Users, Map, User, Heart, MessageSquare, LogOut, Lock, Bell } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import type { Theme, UserInfo } from '@/types';
 import type { TabId } from './BottomNav';
@@ -13,8 +13,9 @@ const NAV_GROUPS: { items: { id: TabId; label: string; Icon: React.ComponentType
   },
   {
     items: [
-      { id: 'friends',  label: 'Friends',  Icon: Heart },
-      { id: 'messages', label: 'Messages', Icon: MessageSquare },
+      { id: 'friends',       label: 'Friends',       Icon: Heart },
+      { id: 'messages',      label: 'Messages',      Icon: MessageSquare },
+      { id: 'notifications', label: 'Notifications', Icon: Bell },
     ],
   },
   {
@@ -34,10 +35,11 @@ interface SidebarProps {
   unreadMessages?: number;
   pendingFriends?: number;
   pendingRooms?: number;
+  unreadNotifications?: number;
   profileCompleted?: boolean;
 }
 
-export default function Sidebar({ activeTab, onTabChange, theme, user, onLogout, pendingCount = 0, unreadMessages = 0, pendingFriends = 0, pendingRooms = 0, profileCompleted = true }: SidebarProps) {
+export default function Sidebar({ activeTab, onTabChange, theme, user, onLogout, pendingCount = 0, unreadMessages = 0, pendingFriends = 0, pendingRooms = 0, unreadNotifications = 0, profileCompleted = true }: SidebarProps) {
   return (
     <div style={{ width: 240, flexShrink: 0, height: '100vh', display: 'flex', flexDirection: 'column', background: theme.surface, borderRight: `2px solid ${theme.border}`, transition: 'background 600ms ease, border-color 600ms ease' }}>
       <div style={{ padding: '24px 20px 20px', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -59,9 +61,10 @@ export default function Sidebar({ activeTab, onTabChange, theme, user, onLogout,
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {group.items.map(({ id, label, Icon }) => {
                 const active = activeTab === id;
-                const badge = id === 'messages' ? unreadMessages
-                            : id === 'friends'  ? (pendingFriends || pendingCount)
-                            : id === 'rooms'    ? pendingRooms
+                const badge = id === 'messages'      ? unreadMessages
+                            : id === 'friends'       ? (pendingFriends || pendingCount)
+                            : id === 'rooms'         ? pendingRooms
+                            : id === 'notifications' ? unreadNotifications
                             : null;
                 const locked = id === 'rooms' && !profileCompleted;
 

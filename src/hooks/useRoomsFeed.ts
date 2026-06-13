@@ -8,6 +8,9 @@ export interface FeedRoom {
   description: string | null;
   category: string;
   host_name: string;
+  host_avatar_url: string | null;
+  host_gender: string | null;
+  host_tags: string[] | null;
   member_count: number;
   max_members: number;
   event_date: string | null;
@@ -40,13 +43,46 @@ export function useRoomsFeed() {
         const { data, error } = await supabase
           .from('rooms')
           .select(SELECT)
+          .in('status', ['live', 'soon'])
           .or(`event_date.gte.${now},event_date.is.null`)
           .order('created_at', { ascending: false })
           .range(from, from + PAGE_SIZE - 1);
 
         if (cancelled) return;
         if (!error) {
-          const rows = (data ?? []) as FeedRoom[];
+          const rawRows = (data ?? []) as any[];
+
+          // Batch-fetch host profiles by user_id (rooms.user_id → profiles.id)
+          const hostIds = [...new Set(rawRows.map(r => r.user_id).filter(Boolean))];
+          let profileMap = new Map<string, { avatar_url: string | null; gender: string | null; profile_tags: string[] | null }>();
+          if (hostIds.length) {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id, avatar_url, gender, profile_tags')
+              .in('id', hostIds);
+            (profiles ?? []).forEach((p: any) => profileMap.set(p.id, p));
+          }
+
+          const rows = rawRows.map((r): FeedRoom => ({
+            id: r.id,
+            user_id: r.user_id,
+            name: r.name,
+            description: r.description ?? null,
+            category: r.category,
+            host_name: r.host_name,
+            host_avatar_url: profileMap.get(r.user_id)?.avatar_url ?? null,
+            host_gender: profileMap.get(r.user_id)?.gender ?? null,
+            host_tags: profileMap.get(r.user_id)?.profile_tags ?? null,
+            member_count: r.member_count,
+            max_members: r.max_members,
+            event_date: r.event_date ?? null,
+            next_event: r.next_event ?? null,
+            location_name: r.location_name ?? null,
+            is_private: r.is_private,
+            status: r.status,
+            created_at: r.created_at,
+            join_code: r.join_code ?? null,
+          }));
           setRooms(prev => (page === 0 ? rows : [...prev, ...rows]));
           setHasMore(rows.length === PAGE_SIZE);
         } else {

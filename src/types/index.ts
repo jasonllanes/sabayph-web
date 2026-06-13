@@ -205,6 +205,19 @@ export interface DiscoverProfile {
   id_verified: boolean;
 }
 
+export type NotificationType = 'new_message' | 'join_request' | 'accepted' | 'gc_established';
+
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  data: Record<string, any>;
+  is_read: boolean;
+  created_at: string;
+}
+
 export interface Profile {
   id: string;
   display_name: string | null;

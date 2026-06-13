@@ -11,6 +11,7 @@ interface Props {
   userName?: string;
   userAvatar?: string;
   isMobile?: boolean;
+  seenStoryIds?: Set<string>;
   onAddStory: () => void;
   onViewOwnStory?: (stories: Story[]) => void;
   onViewStory: (userStories: Story[], startIdx?: number) => void;
@@ -54,6 +55,7 @@ export default function StoriesBar({
   userName,
   userAvatar,
   isMobile,
+  seenStoryIds,
   onAddStory,
   onViewOwnStory,
   onViewStory,
@@ -70,6 +72,7 @@ export default function StoriesBar({
     uid: string;
     userStories: Story[];
     displayName: string;
+    avatarUrl: string | null;
     gender: string | null;
     tags: string[] | null;
   }> = [];
@@ -81,6 +84,7 @@ export default function StoriesBar({
       uid,
       userStories,
       displayName: first.display_name ?? 'Kasama',
+      avatarUrl: first.avatar_url ?? null,
       gender: first.gender,
       tags: first.profile_tags,
     });
@@ -161,17 +165,24 @@ export default function StoriesBar({
         </button>
 
         {/* ── Other users' story bubbles ── */}
-        {storyUsers.map(({ uid, userStories, displayName, gender, tags }) => {
+        {storyUsers.map(({ uid, userStories, displayName, avatarUrl, gender, tags }) => {
           const latestStory = userStories[0];
           const noteStory = userStories.find(s => s.type === 'note' && s.note_text);
           const isPhotoStory = latestStory.type === 'photo';
+          const allSeen = seenStoryIds ? userStories.every(s => seenStoryIds.has(s.id)) : false;
+
+          const ringBg = allSeen
+            ? T.border
+            : isPhotoStory
+              ? `linear-gradient(135deg, ${T.accent}, ${T.primary})`
+              : `linear-gradient(135deg, ${T.highlight}, ${T.accent})`;
 
           return (
             <button
               key={uid}
               className="story-item-btn"
               onClick={() => onViewStory(userStories, 0)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, opacity: allSeen ? 0.6 : 1, transition: 'opacity 200ms' }}
             >
               <div style={{ height: BUBBLE_RESERVE, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: '100%', alignItems: 'flex-start', paddingBottom: 8 }}>
                 {noteStory?.note_text && <SpeechBubble text={noteStory.note_text} theme={T} />}
@@ -179,29 +190,25 @@ export default function StoriesBar({
 
               <div style={{
                 width: ringSize, height: ringSize, borderRadius: '50%',
-                padding: 2,
-                background: isPhotoStory
-                  ? `linear-gradient(135deg, ${T.accent}, ${T.primary})`
-                  : `linear-gradient(135deg, ${T.highlight}, ${T.accent})`,
+                padding: 2, background: ringBg,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
               }}>
                 <div style={{ width: bubbleSize, height: bubbleSize, borderRadius: '50%', overflow: 'hidden', background: T.primary, border: `2px solid ${T.surface}`, position: 'relative' }}>
                   {isPhotoStory && latestStory.media_url ? (
                     <img src={latestStory.media_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : noteStory ? (
-                    <div style={{ position: 'absolute', inset: 0, background: noteStory.theme_color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: 18, fontWeight: 800, color: '#fff', fontFamily: '"Bricolage Grotesque",serif' }}>
-                        {(noteStory.note_text ?? 'N').charAt(0).toUpperCase()}
-                      </span>
-                    </div>
                   ) : (
-                    <img src={getDefaultAvatar(gender, tags)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                    <img
+                      src={avatarUrl || getDefaultAvatar(gender, tags)}
+                      alt=""
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(gender, tags); }}
+                    />
                   )}
                 </div>
               </div>
 
-              <span style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, whiteSpace: 'nowrap', fontFamily: '"DM Sans",system-ui,sans-serif', maxWidth: ringSize + 20, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: allSeen ? T.textMuted : T.text, whiteSpace: 'nowrap', fontFamily: '"DM Sans",system-ui,sans-serif', maxWidth: ringSize + 20, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center' }}>
                 {displayName.split(' ')[0]}
               </span>
             </button>

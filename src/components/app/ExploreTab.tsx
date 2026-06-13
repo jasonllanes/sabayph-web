@@ -41,10 +41,10 @@ const CAT_STYLE: Record<string, {
   headerBg: string; headerText: string; badgeBg: string; badgeText: string;
   image: string; Icon: typeof Gamepad2; whatLabel: string;
 }> = {
-  rotary:  { headerBg: '#9F5E0F', headerText: '#FEF3E2', badgeBg: '#FEF3E2', badgeText: '#9F5E0F', image: IMG('rotary.png'),  Icon: Heart,          whatLabel: 'Service' },
-  gaming:  { headerBg: '#1E1B4B', headerText: '#EDE9FE', badgeBg: '#EDE9FE', badgeText: '#4F46E5', image: IMG('gaming.png'),  Icon: Gamepad2,       whatLabel: 'Game' },
-  cafe:    { headerBg: '#7F3B19', headerText: '#FEF3E2', badgeBg: '#FEF3E2', badgeText: '#7F3B19', image: IMG('coffee.png'),  Icon: Coffee,         whatLabel: 'Venue' },
-  pasabuy: { headerBg: '#B45309', headerText: '#FFFBEB', badgeBg: '#FFFBEB', badgeText: '#B45309', image: IMG('pasabuy.png'), Icon: ShoppingBasket, whatLabel: 'Items' },
+  rotary:  { headerBg: '#1A7A3C', headerText: '#EDF7F0', badgeBg: '#C8EDD4', badgeText: '#0F5C2C', image: IMG('rotary.png'),  Icon: Heart,          whatLabel: 'Service' },
+  gaming:  { headerBg: '#6D28D9', headerText: '#EDE9FE', badgeBg: '#2E1065', badgeText: '#C084FC', image: IMG('gaming.png'),  Icon: Gamepad2,       whatLabel: 'Game' },
+  cafe:    { headerBg: '#5C3317', headerText: '#F5EDE2', badgeBg: '#EDD9C0', badgeText: '#5C3317', image: IMG('coffee.png'),  Icon: Coffee,         whatLabel: 'Venue' },
+  pasabuy: { headerBg: '#CA8A04', headerText: '#FEFCE8', badgeBg: '#FEF9C3', badgeText: '#78350F', image: IMG('pasabuy.png'), Icon: ShoppingBasket, whatLabel: 'Items' },
 };
 
 function formatEventDate(iso: string): string {
@@ -601,7 +601,7 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
                   key={room.id}
                   room={room}
                   userId={userId}
-                  outerTheme={T}
+                  outerTheme={THEMES[room.category as keyof typeof THEMES] ?? T}
                   reqState={requestStates[room.id] ?? 'none'}
                   requestingId={requestingId}
                   requestMsg={requestMsg}
@@ -713,7 +713,8 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
         const dr = rooms.find(r => r.id === detailRoomId);
         if (!dr) return null;
         const cat = CAT_STYLE[dr.category] ?? CAT_STYLE.rotary;
-        const isDarkSurface = parseInt(T.surface.replace('#', '').slice(0, 2), 16) < 100;
+        const drTheme = THEMES[dr.category as keyof typeof THEMES] ?? T;
+        const isDarkSurface = parseInt(drTheme.surface.replace('#', '').slice(0, 2), 16) < 100;
         const accentColor = isDarkSurface ? cat.headerText : cat.headerBg;
         const fill = Math.min((dr.member_count / dr.max_members) * 100, 100);
         const eventDisplay = dr.event_date ? formatEventDate(dr.event_date) : dr.next_event;
@@ -732,7 +733,7 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
             onMouseUp={e => { if (e.target === e.currentTarget && (e.currentTarget as HTMLDivElement).dataset.dismissing === '1') setDetailRoomId(null); (e.currentTarget as HTMLDivElement).dataset.dismissing = ''; }}
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', fontFamily: '"DM Sans", system-ui, sans-serif' }}
           >
-            <div style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', background: T.surface, borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
+            <div style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', background: drTheme.surface, borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
 
               {/* Header */}
               <div style={{ padding: '18px 20px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
@@ -740,65 +741,65 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
                   <p style={{ fontSize: 11, fontFamily: '"VT323", monospace', color: accentColor, margin: '0 0 2px', letterSpacing: 1 }}>
                     {dr.category === 'gaming' ? 'GAMING LOBBY' : dr.category === 'cafe' ? 'CAFE HANGOUT' : dr.category === 'pasabuy' ? 'PASABUY REQUEST' : 'ROTARY ROOM'}
                   </p>
-                  <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: '0 0 6px', lineHeight: 1.2, fontFamily: '"Bricolage Grotesque", serif', letterSpacing: '-0.02em' }}>{dr.name}</h2>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: drTheme.text, margin: '0 0 6px', lineHeight: 1.2, fontFamily: '"Bricolage Grotesque", serif', letterSpacing: '-0.02em' }}>{dr.name}</h2>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                     {dr.status === 'confirmed' && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
                     {dr.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
-                    {dr.is_private && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: T.surfaceAlt, color: T.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} /> PRIVATE</span>}
+                    {dr.is_private && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: drTheme.surfaceAlt, color: drTheme.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} /> PRIVATE</span>}
                     {dr.user_id === userId && <span style={{ fontSize: 10, fontWeight: 700, background: accentColor, color: isDarkSurface ? '#0a0a0a' : '#fff', padding: '2px 8px', borderRadius: 8 }}>YOUR ROOM</span>}
                   </div>
                 </div>
-                <button onClick={() => setDetailRoomId(null)} style={{ width: 36, height: 36, borderRadius: '50%', background: T.surfaceAlt, border: `1.5px solid ${T.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textMuted, flexShrink: 0 }}>
+                <button onClick={() => setDetailRoomId(null)} style={{ width: 36, height: 36, borderRadius: '50%', background: drTheme.surfaceAlt, border: `1.5px solid ${drTheme.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: drTheme.textMuted, flexShrink: 0 }}>
                   <X size={16} />
                 </button>
               </div>
 
-              <p style={{ padding: '10px 20px 0', fontSize: 13, color: T.textMuted, margin: 0 }}>
-                Hosted by <strong style={{ color: T.text }}>{dr.host_name}</strong>
+              <p style={{ padding: '10px 20px 0', fontSize: 13, color: drTheme.textMuted, margin: 0 }}>
+                Hosted by <strong style={{ color: drTheme.text }}>{dr.host_name}</strong>
               </p>
 
               {/* Quick chips */}
               {(dr.game_name || eventDisplay || dr.location_name) && (
                 <div style={{ padding: '10px 20px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {dr.game_name && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: drTheme.surfaceAlt, border: `1px solid ${drTheme.border}` }}>
                       <span style={{ fontSize: 14 }}>🎮</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{dr.game_name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: drTheme.text }}>{dr.game_name}</span>
                     </div>
                   )}
                   {eventDisplay && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: drTheme.surfaceAlt, border: `1px solid ${drTheme.border}` }}>
                       <span style={{ fontSize: 14 }}>📅</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{eventDisplay}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: drTheme.text }}>{eventDisplay}</span>
                     </div>
                   )}
                   {dr.location_name && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: drTheme.surfaceAlt, border: `1px solid ${drTheme.border}` }}>
                       <MapPin size={13} style={{ color: accentColor, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{dr.location_name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: drTheme.text }}>{dr.location_name}</span>
                     </div>
                   )}
                 </div>
               )}
 
               {/* Members bar */}
-              <div style={{ margin: '14px 20px 0', padding: '14px', background: T.surfaceAlt, borderRadius: 16, border: `1px solid ${T.border}` }}>
+              <div style={{ margin: '14px 20px 0', padding: '14px', background: drTheme.surfaceAlt, borderRadius: 16, border: `1px solid ${drTheme.border}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: drTheme.text }}>
                     <Users size={13} style={{ marginRight: 6, verticalAlign: 'middle' }} />
                     {dr.category === 'gaming' ? 'Players' : dr.category === 'cafe' ? 'Guests' : dr.category === 'pasabuy' ? 'Agents' : 'Members'}
                   </span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>{dr.member_count} / {dr.max_members}</span>
                 </div>
-                <div style={{ height: 6, background: T.surface, borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: 6, background: drTheme.surface, borderRadius: 3, overflow: 'hidden' }}>
                   <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: accentColor, transition: 'width 600ms' }} />
                 </div>
               </div>
 
               {/* Description */}
               {dr.description && (
-                <div style={{ margin: '14px 20px 0', padding: '14px', background: T.surfaceAlt, borderRadius: 16, border: `1px solid ${T.border}` }}>
-                  <pre style={{ fontSize: 13, color: T.text, margin: 0, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{dr.description}</pre>
+                <div style={{ margin: '14px 20px 0', padding: '14px', background: drTheme.surfaceAlt, borderRadius: 16, border: `1px solid ${drTheme.border}` }}>
+                  <pre style={{ fontSize: 13, color: drTheme.text, margin: 0, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{dr.description}</pre>
                 </div>
               )}
 
@@ -814,13 +815,13 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
 
               {/* Itinerary (Rotary only) */}
               {hasItinerary && (
-                <div style={{ margin: '14px 20px 0', borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                <div style={{ margin: '14px 20px 0', borderRadius: 16, border: `1px solid ${drTheme.border}`, overflow: 'hidden' }}>
                   <button
                     onClick={() => setExpandedId(isItinExpanded ? null : dr.id)}
-                    style={{ width: '100%', padding: '12px 16px', background: T.surfaceAlt, border: 'none', borderBottom: isItinExpanded ? `1px solid ${T.border}` : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: 'inherit' }}
+                    style={{ width: '100%', padding: '12px 16px', background: drTheme.surfaceAlt, border: 'none', borderBottom: isItinExpanded ? `1px solid ${drTheme.border}` : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: 'inherit' }}
                   >
                     <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>📋 Itinerary ({dr.itinerary.length} steps)</span>
-                    {isItinExpanded ? <ChevronUp size={14} style={{ color: T.textMuted }} /> : <ChevronDown size={14} style={{ color: T.textMuted }} />}
+                    {isItinExpanded ? <ChevronUp size={14} style={{ color: drTheme.textMuted }} /> : <ChevronDown size={14} style={{ color: drTheme.textMuted }} />}
                   </button>
                   {isItinExpanded && (
                     <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -829,10 +830,10 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
                           <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${accentColor}18`, border: `1.5px solid ${accentColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: accentColor, flexShrink: 0 }}>{idx + 1}</div>
                           <div style={{ flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              {item.time && <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 600 }}>{item.time}</span>}
-                              <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{item.title}</span>
+                              {item.time && <span style={{ fontSize: 12, color: drTheme.textMuted, fontWeight: 600 }}>{item.time}</span>}
+                              <span style={{ fontSize: 13, fontWeight: 700, color: drTheme.text }}>{item.title}</span>
                             </div>
-                            {item.description && <p style={{ fontSize: 12, color: T.textMuted, margin: '2px 0 0', lineHeight: 1.4 }}>{item.description}</p>}
+                            {item.description && <p style={{ fontSize: 12, color: drTheme.textMuted, margin: '2px 0 0', lineHeight: 1.4 }}>{item.description}</p>}
                           </div>
                         </div>
                       ))}

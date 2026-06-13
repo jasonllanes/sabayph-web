@@ -1,15 +1,16 @@
-import { Compass, Users, Map, User, Heart, MessageSquare, Lock } from 'lucide-react';
+import { Compass, Users, Map, User, Heart, MessageSquare, Lock, Bell } from 'lucide-react';
 import type { Theme } from '@/types';
 
-export type TabId = 'discover' | 'rooms' | 'explore' | 'friends' | 'messages' | 'profile';
+export type TabId = 'discover' | 'rooms' | 'explore' | 'friends' | 'messages' | 'profile' | 'notifications';
 
 const TABS: { id: TabId; label: string; Icon: React.ComponentType<any> }[] = [
-  { id: 'discover',  label: 'Discover',  Icon: Compass },
-  { id: 'explore',   label: 'Explore',   Icon: Map },
-  { id: 'rooms',     label: 'Rooms',     Icon: Users },
-  { id: 'friends',   label: 'Friends',   Icon: Heart },
-  { id: 'messages',  label: 'Messages',  Icon: MessageSquare },
-  { id: 'profile',   label: 'Profile',   Icon: User },
+  { id: 'discover',      label: 'Discover', Icon: Compass },
+  { id: 'explore',       label: 'Explore',  Icon: Map },
+  { id: 'rooms',         label: 'Rooms',    Icon: Users },
+  { id: 'friends',       label: 'Friends',  Icon: Heart },
+  { id: 'messages',      label: 'Messages', Icon: MessageSquare },
+  { id: 'notifications', label: 'Alerts',   Icon: Bell },
+  { id: 'profile',       label: 'Profile',  Icon: User },
 ];
 
 interface BottomNavProps {
@@ -19,16 +20,17 @@ interface BottomNavProps {
   unreadMessages?: number;
   pendingFriends?: number;
   pendingRooms?: number;
+  unreadNotifications?: number;
   profileCompleted?: boolean;
 }
 
-export default function BottomNav({ activeTab, onTabChange, theme, unreadMessages = 0, pendingFriends = 0, pendingRooms = 0, profileCompleted = true }: BottomNavProps) {
+export default function BottomNav({ activeTab, onTabChange, theme, unreadMessages = 0, pendingFriends = 0, pendingRooms = 0, unreadNotifications = 0, profileCompleted = true }: BottomNavProps) {
   return (
     <div style={{ flexShrink: 0, display: 'flex', background: theme.surface, borderTop: `2px solid ${theme.border}`, paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}>
       {TABS.map(({ id, label, Icon }) => {
         const active = activeTab === id;
         const locked = id === 'rooms' && !profileCompleted;
-        const badge = locked ? 0 : id === 'messages' ? unreadMessages : id === 'friends' ? pendingFriends : id === 'rooms' ? pendingRooms : 0;
+        const badge = locked ? 0 : id === 'messages' ? unreadMessages : id === 'friends' ? pendingFriends : id === 'rooms' ? pendingRooms : id === 'notifications' ? unreadNotifications : 0;
         return (
           <button
             key={id}

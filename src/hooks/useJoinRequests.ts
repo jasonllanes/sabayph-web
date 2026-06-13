@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { createNotification } from '@/hooks/useNotifications';
 
 export interface JoinRequest {
   id: string;
@@ -34,6 +35,10 @@ export function useRoomJoinRequests(ownedRoomIds: string[]) {
   const approveRequest = async (req: JoinRequest) => {
     const { data: { user } } = await supabase.auth.getUser();
 
+    // Fetch the room name before making changes
+    const { data: roomRow } = await supabase.from('rooms').select('name').eq('id', req.room_id).single();
+    const roomName = roomRow?.name ?? 'the room';
+
     await Promise.all([
       supabase.from('join_requests').update({ status: 'approved' }).eq('id', req.id),
       supabase.from('room_members').upsert({ room_id: req.room_id, user_id: req.user_id }, { onConflict: 'room_id,user_id' }),
@@ -52,10 +57,26 @@ export function useRoomJoinRequests(ownedRoomIds: string[]) {
         room_id: req.room_id,
         sender_id: user.id,
         sender_name: 'SabayPH',
-        content: `✅ Booking confirmed! ${req.display_name ?? 'Your agent'} has been accepted as courier. Welcome to your tracking group chat — use this to coordinate the delivery!`,
+        content: `✅ ${req.display_name ?? 'A kasama'} has been accepted and joined the room! Use this group chat to coordinate.`,
         is_system: true,
       });
     }
+
+    // Notify the requester that they've been accepted
+    await createNotification(
+      req.user_id,
+      'accepted',
+      "You've been accepted! 🎉",
+      `${req.display_name ?? 'You'} got accepted into "${roomName}". Welcome to the kasama!`,
+      { room_id: req.room_id, room_name: roomName },
+    );
+    await createNotification(
+      req.user_id,
+      'gc_established',
+      'Group chat is ready!',
+      `A group chat has been set up for "${roomName}". Tap to open and coordinate with your kasama.`,
+      { room_id: req.room_id, room_name: roomName },
+    );
 
     await refresh();
   };
@@ -93,5 +114,18 @@ export async function submitJoinRequest(
     { room_id: roomId, user_id: userId, display_name: displayName, message: message ?? null, status: 'pending' },
     { onConflict: 'room_id,user_id' },
   );
+  if (!error) {
+    // Notify the room owner about the new join request
+    const { data: roomRow } = await supabase.from('rooms').select('user_id, name').eq('id', roomId).single();
+    if (roomRow) {
+      await createNotification(
+        roomRow.user_id,
+        'join_request',
+        'New join request',
+        `${displayName} wants to join your room "${roomRow.name}".`,
+        { room_id: roomId, room_name: roomRow.name, requester_name: displayName },
+      );
+    }
+  }
   return { error: error?.message ?? null };
 }

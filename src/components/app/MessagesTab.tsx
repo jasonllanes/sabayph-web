@@ -43,10 +43,10 @@ function NewConvPicker({ userId, theme: T, onPick, onClose }: { userId: string; 
   const filtered = friends.filter(f => f.display_name?.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end' }}>
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
-      <div style={{ position: 'relative', width: '100%', background: T.surface, borderRadius: '20px 20px 0 0', border: `2px solid ${T.border}`, borderBottom: 'none', maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '12px 20px 0' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'flex-end' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
+      <div style={{ position: 'relative', width: '100%', background: T.surface, borderRadius: '20px 20px 0 0', border: `2px solid ${T.border}`, borderBottom: 'none', maxHeight: '82vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '12px 20px 0', flexShrink: 0 }}>
           <div style={{ width: 40, height: 4, borderRadius: 2, background: T.border, margin: '0 auto 14px' }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <h3 className="font-display" style={{ fontSize: 17, fontWeight: 800, color: T.text, margin: 0 }}>New Message</h3>
@@ -58,7 +58,7 @@ function NewConvPicker({ userId, theme: T, onPick, onClose }: { userId: string; 
               style={{ width: '100%', height: 40, paddingLeft: 36, paddingRight: 12, fontSize: 14, fontFamily: 'inherit', border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.bg, color: T.text, outline: 'none', boxSizing: 'border-box' }} />
           </div>
         </div>
-        <div style={{ overflowY: 'auto', padding: '0 8px 20px' }}>
+        <div style={{ overflowY: 'auto', flex: 1, padding: '0 8px', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 24px)' }}>
           {filtered.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '24px 0', color: T.textMuted }}>
               <UserPlus size={28} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
@@ -471,7 +471,7 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
               <>
                 <div style={{ padding: '4px 12px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Users size={12} style={{ color: T.textMuted }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: 0.5 }}>TRACKING GROUP CHATS</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, letterSpacing: 0.5 }}>GROUP CHATS</span>
                 </div>
                 {groupChats.map(gc => (
                   <button key={gc.room_id}

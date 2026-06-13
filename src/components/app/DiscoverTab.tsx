@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   Shield, Check, ShieldCheck, ShieldAlert, Star, UserPlus,
   ArrowRight, Plus, MapPin, CalendarDays, Users, Lock, Unlock,
-  BookOpen, Wifi,
+  BookOpen, Wifi, X, Copy,
 } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { CATEGORIES, THEMES } from '@/data/themes';
@@ -17,6 +17,7 @@ import StoryViewer from '@/components/app/StoryViewer';
 import AddStoryModal from '@/components/app/AddStoryModal';
 import { tagStyle, getDefaultAvatar } from '@/components/app/tagConstants';
 import { getLevelInfo } from '@/lib/levelUtils';
+import { getMyRequestStatus, submitJoinRequest } from '@/hooks/useJoinRequests';
 import type { Theme, ThemeKey, DiscoverProfile, CategoryId } from '@/types';
 import type { Story } from '@/hooks/useStories';
 import type { FeedRoom } from '@/hooks/useRoomsFeed';
@@ -141,7 +142,180 @@ function PersonCard({ person, theme: T, onView, compact }: { person: DiscoverPro
 
 // ─── Room feed card ───────────────────────────────────────────────────────────
 
-function RoomFeedCard({ room, theme: T, onBrowse, userId }: { room: FeedRoom; theme: Theme; onBrowse?: () => void; userId?: string }) {
+function RoomDetailDialog({ room, theme: T, onClose, userId, userName }: {
+  room: FeedRoom; theme: Theme; onClose: () => void;
+  userId?: string; userName?: string;
+}) {
+  const catTheme = THEMES[room.category as keyof typeof THEMES] ?? T;
+  const cat = CATEGORIES.find(c => c.id === room.category);
+  const fillPct = room.max_members > 0 ? Math.min(100, (room.member_count / room.max_members) * 100) : 0;
+  const isFull = room.member_count >= room.max_members;
+  const eventDate = formatDate(room.event_date ?? room.next_event);
+  const isOwner = !!userId && room.user_id === userId;
+  const [copied, setCopied] = useState(false);
+  const [reqStatus, setReqStatus] = useState<'none' | 'pending' | 'approved' | 'rejected' | 'loading'>('loading');
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState('');
+
+  useEffect(() => {
+    if (!userId || isOwner) { setReqStatus('none'); return; }
+    getMyRequestStatus(userId, room.id).then(s => setReqStatus(s));
+  }, [userId, room.id, isOwner]);
+
+  const handleApply = async () => {
+    if (!userId || !userName) return;
+    setApplying(true);
+    setApplyError('');
+    const { error } = await submitJoinRequest(userId, room.id, userName);
+    setApplying(false);
+    if (error) { setApplyError(error); return; }
+    setReqStatus('pending');
+  };
+
+  const copyCode = () => {
+    if (!room.join_code) return;
+    navigator.clipboard.writeText(room.join_code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }} onClick={onClose} />
+      <div style={{
+        position: 'relative', width: '100%', maxWidth: 380,
+        background: T.surface, borderRadius: 22,
+        border: `2.5px solid ${T.border}`,
+        boxShadow: `0 20px 60px rgba(0,0,0,0.35)`,
+        overflow: 'hidden', fontFamily: '"DM Sans",system-ui,sans-serif',
+        maxHeight: 'calc(100dvh - 60px)', display: 'flex', flexDirection: 'column',
+      }}>
+        {/* Close */}
+        <button onClick={onClose} style={{ position: 'absolute', top: 12, right: 12, zIndex: 10, width: 30, height: 30, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: 'none', cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <X size={15} />
+        </button>
+
+        {/* Header */}
+        <div style={{ height: 88, background: catTheme.primary, flexShrink: 0, position: 'relative', display: 'flex', alignItems: 'flex-end', padding: '0 16px 14px' }}>
+          <div style={{ position: 'absolute', inset: 0, opacity: 0.12, backgroundImage: `linear-gradient(${catTheme.bg} 1px,transparent 1px),linear-gradient(90deg,${catTheme.bg} 1px,transparent 1px)`, backgroundSize: '18px 18px', pointerEvents: 'none' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, position: 'relative' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', overflow: 'hidden', border: '2.5px solid rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.18)' }}>
+                <img
+                  src={room.host_avatar_url || getDefaultAvatar(room.host_gender, room.host_tags)}
+                  alt={room.host_name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(room.host_gender, room.host_tags); }}
+                />
+              </div>
+              <div style={{ position: 'absolute', bottom: -1, right: -1, width: 18, height: 18, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', border: '1.5px solid rgba(255,255,255,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {cat ? <cat.Icon size={10} color="#fff" strokeWidth={2} /> : <Users size={10} color="#fff" strokeWidth={2} />}
+              </div>
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.75)', textTransform: 'capitalize' }}>{room.category} · {room.host_name}</p>
+              <p style={{ margin: '2px 0 0', fontSize: 17, fontWeight: 800, color: '#fff', fontFamily: '"Bricolage Grotesque",serif', lineHeight: 1.2 }}>{room.name}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px' }}>
+          {room.description && (
+            <p style={{ fontSize: 13, color: T.text, lineHeight: 1.65, margin: '0 0 14px', padding: '10px 12px', background: T.surfaceAlt, borderRadius: 12, border: `1px solid ${T.border}` }}>
+              {room.description}
+            </p>
+          )}
+
+          {/* Meta chips */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            {eventDate && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: T.text, background: T.surfaceAlt, padding: '5px 11px', borderRadius: 20, border: `1px solid ${T.border}` }}>
+                <CalendarDays size={12} color={catTheme.primary} /> {eventDate}
+              </span>
+            )}
+            {room.location_name && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: T.text, background: T.surfaceAlt, padding: '5px 11px', borderRadius: 20, border: `1px solid ${T.border}` }}>
+                <MapPin size={12} color={catTheme.primary} /> {room.location_name}
+              </span>
+            )}
+            {room.is_private && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: T.textMuted, background: T.surfaceAlt, padding: '5px 11px', borderRadius: 20, border: `1px solid ${T.border}` }}>
+                <Lock size={12} /> Private
+              </span>
+            )}
+          </div>
+
+          {/* Members */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 600 }}>
+                <span style={{ color: T.text, fontWeight: 700 }}>{room.member_count}</span> / {room.max_members} members
+              </span>
+              {isFull && <span style={{ fontSize: 10, fontWeight: 700, color: '#C82718', background: '#FEF2F2', padding: '2px 8px', borderRadius: 8 }}>FULL</span>}
+            </div>
+            <div style={{ height: 6, background: T.surfaceAlt, borderRadius: 3, overflow: 'hidden', border: `1px solid ${T.border}` }}>
+              <div style={{ height: '100%', width: `${fillPct}%`, background: isFull ? '#C82718' : catTheme.primary, borderRadius: 3, transition: 'width 400ms ease' }} />
+            </div>
+          </div>
+
+          {/* Join code */}
+          {room.join_code && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: T.bg, borderRadius: 14, border: `1.5px solid ${T.border}` }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: T.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: '"VT323",monospace' }}>Join Code</p>
+                <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 800, color: catTheme.primary, letterSpacing: 2, fontFamily: '"VT323",monospace' }}>{room.join_code}</p>
+              </div>
+              <button onClick={copyCode} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 20, border: `1.5px solid ${T.border}`, background: T.surface, color: T.text, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+              </button>
+            </div>
+          )}
+
+          {/* Apply error */}
+          {applyError && (
+            <p style={{ fontSize: 12, color: '#C82718', margin: '10px 0 0', padding: '8px 12px', background: '#FEE2E2', borderRadius: 10 }}>{applyError}</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ flexShrink: 0, padding: '12px 16px 16px', borderTop: `1.5px solid ${T.border}`, background: T.bg, display: 'flex', gap: 10 }}>
+          <button onClick={onClose} style={{ flex: 1, height: 42, borderRadius: 21, border: `2px solid ${T.border}`, background: T.surface, color: T.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+            Close
+          </button>
+
+          {isOwner ? (
+            <button onClick={onClose} style={{ flex: 2, height: 42, borderRadius: 21, border: `2px solid ${catTheme.primary}`, background: 'transparent', color: catTheme.primary, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}>
+              Your Room
+            </button>
+          ) : reqStatus === 'pending' ? (
+            <button disabled style={{ flex: 2, height: 42, borderRadius: 21, border: 'none', background: T.surfaceAlt, color: T.textMuted, fontSize: 13, fontWeight: 700, cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}>
+              <Check size={14} /> Applied
+            </button>
+          ) : reqStatus === 'approved' ? (
+            <button onClick={onClose} style={{ flex: 2, height: 42, borderRadius: 21, border: 'none', background: '#10B981', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}>
+              <Check size={14} /> Accepted — Open Chat
+            </button>
+          ) : isFull ? (
+            <button disabled style={{ flex: 2, height: 42, borderRadius: 21, border: 'none', background: '#FEE2E2', color: '#C82718', fontSize: 13, fontWeight: 700, cursor: 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}>
+              Room Full
+            </button>
+          ) : (
+            <button
+              onClick={handleApply}
+              disabled={applying || reqStatus === 'loading'}
+              style={{ flex: 2, height: 42, borderRadius: 21, border: 'none', background: applying || reqStatus === 'loading' ? T.border : catTheme.primary, color: applying || reqStatus === 'loading' ? T.textMuted : catTheme.bg, fontSize: 13, fontWeight: 700, cursor: applying || reqStatus === 'loading' ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit', transition: 'opacity 150ms' }}
+            >
+              {applying ? 'Applying…' : <><UserPlus size={14} /> Apply to Join</>}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RoomFeedCard({ room, theme: T, onBrowse, onView, userId }: { room: FeedRoom; theme: Theme; onBrowse?: () => void; onView?: () => void; userId?: string }) {
   const catTheme = THEMES[room.category as keyof typeof THEMES] ?? T;
   const cat = CATEGORIES.find(c => c.id === room.category);
   const fillPct = room.max_members > 0 ? Math.min(100, (room.member_count / room.max_members) * 100) : 0;
@@ -156,12 +330,29 @@ function RoomFeedCard({ room, theme: T, onBrowse, userId }: { room: FeedRoom; th
       boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       borderTop: `3px solid ${catTheme.primary}`,
       transition: 'box-shadow 150ms',
-    }}>
+    }}
+      onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 4px 16px ${catTheme.primary}22`)}
+      onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.06)')}
+    >
+      {/* Clickable body area */}
+      <div onClick={onView} style={{ cursor: onView ? 'pointer' : 'default' }}>
       {/* Post header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 38, height: 38, borderRadius: '50%', background: catTheme.primary, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {cat ? <cat.Icon size={18} color={catTheme.bg} strokeWidth={1.8} /> : <Users size={18} color={catTheme.bg} strokeWidth={1.8} />}
+          {/* Host avatar with category badge */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: catTheme.primary, overflow: 'hidden', border: `2px solid ${T.border}` }}>
+              <img
+                src={room.host_avatar_url || getDefaultAvatar(room.host_gender, room.host_tags)}
+                alt={room.host_name}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(room.host_gender, room.host_tags); }}
+              />
+            </div>
+            {/* Category icon badge */}
+            <div style={{ position: 'absolute', bottom: -2, right: -2, width: 18, height: 18, borderRadius: '50%', background: catTheme.primary, border: `1.5px solid ${T.surface}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {cat ? <cat.Icon size={10} color={catTheme.bg} strokeWidth={2} /> : <Users size={10} color={catTheme.bg} strokeWidth={2} />}
+            </div>
           </div>
           <div>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text, fontFamily: '"DM Sans",system-ui,sans-serif' }}>
@@ -228,6 +419,8 @@ function RoomFeedCard({ room, theme: T, onBrowse, userId }: { room: FeedRoom; th
         </div>
       </div>
 
+      </div>{/* end clickable body */}
+
       {/* Footer */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderTop: `1px solid ${T.border}`, background: T.bg }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -235,12 +428,12 @@ function RoomFeedCard({ room, theme: T, onBrowse, userId }: { room: FeedRoom; th
           <span style={{ fontSize: 11, color: '#15803D', fontWeight: 700 }}>Active</span>
         </div>
         <button
-          onClick={onBrowse}
+          onClick={onView ?? onBrowse}
           style={{ height: 32, padding: '0 14px', borderRadius: 16, border: isOwner ? `1.5px solid ${catTheme.primary}` : 'none', background: isOwner ? 'transparent' : catTheme.primary, color: isOwner ? catTheme.primary : catTheme.bg, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'opacity 150ms', fontFamily: '"DM Sans",system-ui,sans-serif' }}
           onMouseEnter={e => (e.currentTarget.style.opacity = '0.86')}
           onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
         >
-          {isOwner ? 'Manage Room' : 'View Room'} <ArrowRight size={12} />
+          {isOwner ? 'Manage Room' : 'View Details'} <ArrowRight size={12} />
         </button>
       </div>
     </div>
@@ -428,9 +621,11 @@ function DesktopSidebar({ people, rooms, theme: T, onViewPerson, onBrowse }: {
                 onMouseEnter={e => (e.currentTarget.style.background = T.surfaceAlt)}
                 onMouseLeave={e => (e.currentTarget.style.background = 'none')}
               >
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: T.primary, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
-                  <img src={getDefaultAvatar(person.gender, person.profile_tags)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                  {person.is_online && <span style={{ position: 'absolute', bottom: 1, right: 1, width: 9, height: 9, borderRadius: '50%', background: '#4ADE80', border: `1.5px solid ${T.surface}` }} />}
+                <div style={{ position: 'relative', width: 36, height: 36, flexShrink: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: T.primary, position: 'relative', overflow: 'hidden' }}>
+                    <img src={person.avatar_url || getDefaultAvatar(person.gender, person.profile_tags)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(person.gender, person.profile_tags); }} />
+                  </div>
+                  {person.is_online && <span style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderRadius: '50%', background: '#4ADE80', border: `2px solid ${T.surface}`, display: 'block' }} />}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: T.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: '"Bricolage Grotesque",serif' }}>
@@ -542,15 +737,58 @@ export default function DiscoverTab({
   const { rooms, loading: roomsLoading, initialized: roomsReady, hasMore, loadMore } = useRoomsFeed();
   const { people, loading: peopleLoading } = useDiscoverPeople(userId);
   const {
+    connections,
     getStatus, getConnection, sendRequest, acceptRequest, removeConnection,
     loading: connLoading, error: connError, tableReady,
   } = useConnections(userId);
 
   // UI state
   const [viewingProfile, setViewingProfile] = useState<DiscoverProfile | null>(null);
+  const [viewingFeedRoom, setViewingFeedRoom] = useState<FeedRoom | null>(null);
   const [showAddStory, setShowAddStory] = useState(false);
   const [viewerStories, setViewerStories] = useState<Story[] | null>(null);
   const [viewerStart, setViewerStart] = useState(0);
+
+  // Seen-story tracking (localStorage)
+  const SEEN_KEY = 'sabayph_seen_stories';
+  const [seenStoryIds, setSeenStoryIds] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]')); }
+    catch { return new Set(); }
+  });
+  const markStorySeen = useCallback((id: string) => {
+    setSeenStoryIds(prev => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      localStorage.setItem(SEEN_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+  const markStoriesUnseen = useCallback((ids: string[]) => {
+    setSeenStoryIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.delete(id));
+      localStorage.setItem(SEEN_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
+  // Friends-only stories: show own + accepted connections' stories
+  const friendIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of connections) {
+      if (c.status === 'accepted') {
+        s.add(c.from_user_id === userId ? c.to_user_id : c.from_user_id);
+      }
+    }
+    return s;
+  }, [connections, userId]);
+
+  const visibleStories = useMemo(() =>
+    tableReady === true && userId
+      ? stories.filter(s => s.user_id === userId || friendIds.has(s.user_id))
+      : stories,
+  [stories, userId, tableReady, friendIds]);
 
   // Pull-to-refresh
   const mobileRootRef = useRef<HTMLDivElement>(null);
@@ -635,11 +873,12 @@ export default function DiscoverTab({
           <div style={{ borderBottom: `1px solid ${T.border}`, padding: '2px 0' }}>
             <StoriesBar
               theme={T}
-              stories={stories}
+              stories={visibleStories}
               userId={userId}
               userName={userName}
               userAvatar={userAvatar}
               isMobile={false}
+              seenStoryIds={seenStoryIds}
               onAddStory={() => setShowAddStory(true)}
               onViewOwnStory={(s) => { setViewerStories(s); setViewerStart(0); }}
               onViewStory={(s, i) => { setViewerStories(s); setViewerStart(i ?? 0); }}
@@ -678,7 +917,7 @@ export default function DiscoverTab({
               <>
                 {filteredRooms.map((room, i) => (
                   <div key={room.id} className="room-card" style={{ transition: 'box-shadow 150ms' }}>
-                    <RoomFeedCard room={room} theme={T} userId={userId} onBrowse={() => handleBrowse(room.category as CategoryId)} />
+                    <RoomFeedCard room={room} theme={T} userId={userId} onBrowse={() => handleBrowse(room.category as CategoryId)} onView={() => setViewingFeedRoom(room)} />
                   </div>
                 ))}
                 {/* Inline: more Active Rooms mid-feed */}
@@ -735,11 +974,14 @@ export default function DiscoverTab({
             userId={userId}
             userAvatar={userAvatar}
             onDelete={async (id) => { await removeStory(id); }}
+            onStorySeen={markStorySeen}
+            onMarkUnseen={markStoriesUnseen}
           />
         )}
         {viewingProfile && (
           <ProfileViewModal
             person={viewingProfile} theme={T}
+            currentUserId={userId}
             connectionStatus={getStatus(viewingProfile.id)}
             connectionLoading={connLoading} connectionError={connError} tableReady={tableReady}
             connection={getConnection(viewingProfile.id)}
@@ -747,6 +989,15 @@ export default function DiscoverTab({
             onAcceptRequest={() => { const c = getConnection(viewingProfile.id); if (c) acceptRequest(c.id); }}
             onRemoveConnection={() => { const c = getConnection(viewingProfile.id); if (c) removeConnection(c.id); }}
             onClose={() => setViewingProfile(null)}
+          />
+        )}
+        {viewingFeedRoom && (
+          <RoomDetailDialog
+            room={viewingFeedRoom}
+            theme={T}
+            userId={userId}
+            userName={userName}
+            onClose={() => setViewingFeedRoom(null)}
           />
         )}
       </div>
@@ -765,29 +1016,51 @@ export default function DiscoverTab({
     >
       <style>{`.room-card:hover{box-shadow:0 4px 12px rgba(0,0,0,0.08)!important}`}</style>
 
-      {/* Pull-to-refresh indicator */}
-      {(ptY > 0 || ptRefreshing) && (
+      {/* Pull-to-refresh: drag indicator */}
+      {ptY > 0 && !ptRefreshing && (
         <div style={{
           position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
           display: 'flex', justifyContent: 'center',
-          transform: `translateY(${ptRefreshing ? 16 : ptY - 40}px)`,
-          transition: ptRefreshing ? 'transform 200ms ease' : 'none',
+          transform: `translateY(${ptY - 40}px)`,
           pointerEvents: 'none',
         }}>
           <div style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: T.surface, border: `2px solid ${T.border}`,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            width: 34, height: 34, borderRadius: '50%',
+            background: '#111', border: '2px solid #333',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <div style={{
-              width: 18, height: 18, borderRadius: '50%',
-              border: `2.5px solid ${T.border}`,
-              borderTopColor: T.primary,
-              animation: ptRefreshing ? 'ptr-spin 700ms linear infinite' : 'none',
-              transform: ptRefreshing ? 'none' : `rotate(${ptY * 3}deg)`,
-            }} />
-            <style>{`@keyframes ptr-spin{to{transform:rotate(360deg)}}`}</style>
+            <img
+              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png"
+              alt=""
+              style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover', transform: `rotate(${ptY * 3}deg)`, transition: 'none' }}
+            />
+          </div>
+        </div>
+      )}
+      {/* Pull-to-refresh: branded loading overlay */}
+      {ptRefreshing && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(8px)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 18, pointerEvents: 'none',
+        }}>
+          <style>{`@keyframes ptr-bounce{0%,100%{transform:translateY(0);opacity:0.5}50%{transform:translateY(-8px);opacity:1}}`}</style>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <img
+              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png"
+              alt="SabayPH"
+              style={{ width: 56, height: 56, borderRadius: 14, objectFit: 'cover', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+            />
+            <span style={{ fontFamily: '"Bricolage Grotesque", serif', fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
+              Sabay<span style={{ color: '#EEA64C' }}>PH</span>
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: 9, height: 9, borderRadius: '50%', background: '#fff', animation: `ptr-bounce 0.9s ease-in-out ${i * 0.18}s infinite` }} />
+            ))}
           </div>
         </div>
       )}
@@ -796,12 +1069,14 @@ export default function DiscoverTab({
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}` }}>
         <StoriesBar
           theme={T}
-          stories={stories}
+          stories={visibleStories}
           userId={userId}
           userName={userName}
           userAvatar={userAvatar}
           isMobile
+          seenStoryIds={seenStoryIds}
           onAddStory={() => setShowAddStory(true)}
+          onViewOwnStory={(s) => { setViewerStories(s); setViewerStart(0); }}
           onViewStory={(s, i) => { setViewerStories(s); setViewerStart(i ?? 0); }}
         />
       </div>
@@ -846,7 +1121,7 @@ export default function DiscoverTab({
                   </div>
                 )}
                 <div className="room-card" style={{ transition: 'box-shadow 150ms' }}>
-                  <RoomFeedCard room={room} theme={T} userId={userId} onBrowse={() => handleBrowse(room.category as CategoryId)} />
+                  <RoomFeedCard room={room} theme={T} userId={userId} onBrowse={() => handleBrowse(room.category as CategoryId)} onView={() => setViewingFeedRoom(room)} />
                 </div>
               </div>
             ))}
@@ -891,6 +1166,8 @@ export default function DiscoverTab({
           userId={userId}
           userAvatar={userAvatar}
           onDelete={async (id) => { await removeStory(id); }}
+          onStorySeen={markStorySeen}
+          onMarkUnseen={markStoriesUnseen}
         />
       )}
       {viewingProfile && (
@@ -905,6 +1182,14 @@ export default function DiscoverTab({
           onAcceptRequest={() => { const c = getConnection(viewingProfile.id); if (c) acceptRequest(c.id); }}
           onRemoveConnection={() => { const c = getConnection(viewingProfile.id); if (c) removeConnection(c.id); }}
           onClose={() => setViewingProfile(null)}
+        />
+      )}
+      {viewingFeedRoom && (
+        <RoomDetailDialog
+          room={viewingFeedRoom}
+          theme={T}
+          onBrowse={() => { handleBrowse(viewingFeedRoom.category as CategoryId); setViewingFeedRoom(null); }}
+          onClose={() => setViewingFeedRoom(null)}
         />
       )}
     </div>

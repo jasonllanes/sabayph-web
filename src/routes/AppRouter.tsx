@@ -27,15 +27,8 @@ function getProfileParam(): string {
   return new URLSearchParams(window.location.search).get('profile') ?? '';
 }
 
-async function checkOnboardingDone(userId: string): Promise<boolean> {
-  const seenLocal = localStorage.getItem('sabayph_onboarding_seen');
-  if (seenLocal) return true;
-  const { data } = await supabase
-    .from('profiles')
-    .select('onboarding_completed')
-    .eq('id', userId)
-    .single();
-  return data?.onboarding_completed ?? false;
+function checkOnboardingDone(_userId: string): boolean {
+  return !!localStorage.getItem('sabayph_onboarding_seen');
 }
 
 export default function AppRouter() {
@@ -60,7 +53,7 @@ export default function AppRouter() {
           if (avatarUrl) {
             supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', session.user.id).then(() => {});
           }
-          const onboardingDone = await checkOnboardingDone(session.user.id);
+          const onboardingDone = checkOnboardingDone(session.user.id);
           setView(onboardingDone ? 'app' : 'onboarding');
         })();
       }
@@ -103,19 +96,15 @@ export default function AppRouter() {
     await supabase.auth.signOut();
   };
 
-  const handleSplashDone = async () => {
+  const handleSplashDone = () => {
     const userId = session?.user?.id;
     if (!userId) { setView('onboarding'); return; }
-    const onboardingDone = await checkOnboardingDone(userId);
+    const onboardingDone = checkOnboardingDone(userId);
     setView(onboardingDone ? 'app' : 'onboarding');
   };
 
-  const handleOnboardingDone = async () => {
+  const handleOnboardingDone = () => {
     localStorage.setItem('sabayph_onboarding_seen', 'true');
-    const userId = session?.user?.id;
-    if (userId) {
-      await supabase.from('profiles').update({ onboarding_completed: true }).eq('id', userId);
-    }
     setView('app');
   };
 

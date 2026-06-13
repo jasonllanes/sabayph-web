@@ -101,16 +101,14 @@ export function useRoomChats(userId?: string) {
   const refresh = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
 
-    // Owned confirmed pasabuy rooms
+    // Owned confirmed rooms (all categories)
     const { data: ownedRooms } = await supabase
       .from('rooms')
-      .select('id, name, join_code')
+      .select('id, name, join_code, category')
       .eq('user_id', userId)
-      .in('status', ['confirmed', 'completed', 'cancelled'])
-      .eq('category', 'pasabuy');
+      .in('status', ['confirmed', 'completed', 'cancelled']);
 
-    // Rooms where user is an accepted courier — use join_requests (proven RLS-safe)
-    // instead of room_members which can have stricter read policies
+    // Rooms where user is an accepted member — use join_requests (proven RLS-safe)
     const { data: approvedReqs } = await supabase
       .from('join_requests')
       .select('room_id')
@@ -122,10 +120,9 @@ export function useRoomChats(userId?: string) {
       const ids = (approvedReqs as { room_id: string }[]).map(r => r.room_id);
       const { data: memberRoomData } = await supabase
         .from('rooms')
-        .select('id, name, join_code')
+        .select('id, name, join_code, category')
         .in('id', ids)
-        .in('status', ['confirmed', 'completed', 'cancelled'])
-        .eq('category', 'pasabuy');
+        .in('status', ['confirmed', 'completed', 'cancelled']);
       memberRooms = (memberRoomData ?? []) as any;
     }
 
@@ -172,7 +169,7 @@ export function useRoomChats(userId?: string) {
   return { chats, loading, refresh };
 }
 
-/** Returns confirmed PasaBuy rooms where the user was accepted as courier (via join_requests). */
+/** Returns confirmed rooms (all categories) where the user was accepted as a member (via join_requests). */
 export function useAcceptedBookings(userId?: string) {
   const [bookings, setBookings] = useState<RoomChatSummary[]>([]);
 
@@ -192,8 +189,7 @@ export function useAcceptedBookings(userId?: string) {
       .from('rooms')
       .select('id, name, join_code')
       .in('id', roomIds)
-      .eq('status', 'confirmed')
-      .eq('category', 'pasabuy');
+      .eq('status', 'confirmed');
 
     setBookings(
       (rooms ?? []).map((r: any) => ({
