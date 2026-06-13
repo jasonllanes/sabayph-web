@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Search, X, Navigation, Users, Lock, Home, Send, Check, Map } from 'lucide-react';
+import { MapPin, Search, X, Navigation, Users, Lock, Home, Send, Check, Map, Calendar, Gamepad2, ShoppingBasket, Coffee, Heart, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
+import type { Room } from '@/types';
 import { useProfile } from '@/hooks/useProfile';
 import { submitJoinRequest, getMyRequestStatus } from '@/hooks/useJoinRequests';
 import { MapContainer, TileLayer, Marker, Circle, useMapEvents } from 'react-leaflet';
@@ -31,6 +33,233 @@ const CATEGORY_COLORS: Record<string, { primary: string; light: string; text: st
 };
 const PH_CENTER: [number, number] = [12.8797, 121.774];
 const LIVE_CATEGORIES = CATEGORIES.filter(c => c.status === 'live');
+
+const IMG = (n: string) =>
+  `https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/${n}`;
+
+const CAT_STYLE: Record<string, {
+  headerBg: string; headerText: string; badgeBg: string; badgeText: string;
+  image: string; Icon: typeof Gamepad2; whatLabel: string;
+}> = {
+  rotary:  { headerBg: '#9F5E0F', headerText: '#FEF3E2', badgeBg: '#FEF3E2', badgeText: '#9F5E0F', image: IMG('rotary.png'),  Icon: Heart,          whatLabel: 'Service' },
+  gaming:  { headerBg: '#1E1B4B', headerText: '#EDE9FE', badgeBg: '#EDE9FE', badgeText: '#4F46E5', image: IMG('gaming.png'),  Icon: Gamepad2,       whatLabel: 'Game' },
+  cafe:    { headerBg: '#7F3B19', headerText: '#FEF3E2', badgeBg: '#FEF3E2', badgeText: '#7F3B19', image: IMG('coffee.png'),  Icon: Coffee,         whatLabel: 'Venue' },
+  pasabuy: { headerBg: '#B45309', headerText: '#FFFBEB', badgeBg: '#FFFBEB', badgeText: '#B45309', image: IMG('pasabuy.png'), Icon: ShoppingBasket, whatLabel: 'Items' },
+};
+
+function formatEventDate(iso: string): string {
+  return new Date(iso).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) + ', ' +
+    d.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' });
+}
+
+function fmtNeededBy(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const diff = d.getTime() - Date.now();
+  const hrs = Math.round(diff / 3_600_000);
+  if (hrs < 0) return 'Overdue';
+  if (hrs < 1) return 'Due soon';
+  if (hrs < 24) return `in ${hrs}h`;
+  return `by ${d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}`;
+}
+
+interface RoomCardProps {
+  room: Room;
+  userId?: string;
+  outerTheme: { border: string; text: string; surface: string; surfaceAlt: string; primary: string; bg: string; textMuted: string; accent: string };
+  reqState: string;
+  requestingId: string | null;
+  requestMsg: string;
+  joinError?: string;
+  onRequestMsg: (v: string) => void;
+  onOpenRequest: () => void;
+  onSendRequest: () => void;
+  onCancelRequest: () => void;
+  onOpenDetail: () => void;
+}
+
+function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, requestMsg, joinError, onRequestMsg, onOpenRequest, onSendRequest, onCancelRequest, onOpenDetail }: RoomCardProps) {
+  const cat = CAT_STYLE[room.category] ?? CAT_STYLE.rotary;
+  const CatIcon = cat.Icon;
+  const isOwn = userId === room.user_id;
+  const isOpen = requestingId === room.id;
+  const pct = Math.min(100, Math.round((room.member_count / room.max_members) * 100));
+  // On dark surfaces cat.headerBg can be darker than the surface itself (e.g. Gaming #1E1B4B on #142536)
+  // so use cat.headerText (always light) as the accent on dark backgrounds
+  const isDarkSurface = parseInt(T.surface.replace('#', '').slice(0, 2), 16) < 100;
+  const accentColor = isDarkSurface ? cat.headerText : cat.headerBg;
+
+  const memberLabel = room.category === 'gaming' ? 'players'
+    : room.category === 'cafe' ? 'guests'
+    : room.category === 'pasabuy' ? 'agents'
+    : 'members';
+
+  // What to show for the "what" row
+  const whatValue = room.category === 'gaming'
+    ? room.game_name ?? null
+    : room.category === 'pasabuy'
+    ? (room.items?.length ? `${room.items.length} item${room.items.length !== 1 ? 's' : ''} · ${room.items.slice(0, 2).map(i => i.name).join(', ')}${room.items.length > 2 ? ` +${room.items.length - 2}` : ''}` : room.location_name)
+    : room.location_name;
+
+  const whenValue = room.category === 'pasabuy'
+    ? fmtNeededBy(room.needed_by ?? room.event_date)
+    : fmtDate(room.event_date);
+
+  const whereValue = room.category === 'gaming'
+    ? (room.game_id ? `ID: ${room.game_id}` : null)
+    : room.category === 'pasabuy'
+    ? (room.dropoff_name ?? room.location_name)
+    : room.location_name;
+
+  return (
+    <div style={{
+      borderRadius: 18, overflow: 'hidden',
+      border: `2px solid ${cat.headerBg}33`,
+      boxShadow: `4px 4px 0 ${cat.headerBg}22`,
+      transition: 'box-shadow 150ms ease, transform 150ms ease',
+      background: T.surface,
+    }}
+      onMouseEnter={e => { (e.currentTarget.style.boxShadow = `6px 6px 0 ${cat.headerBg}55`); (e.currentTarget.style.transform = 'translateY(-1px)'); }}
+      onMouseLeave={e => { (e.currentTarget.style.boxShadow = `4px 4px 0 ${cat.headerBg}22`); (e.currentTarget.style.transform = 'none'); }}
+    >
+      {/* ── Colored header — tap to view full details ── */}
+      <div
+        onClick={onOpenDetail}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onOpenDetail(); }}
+        style={{ background: cat.headerBg, padding: '14px 16px 12px', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, cursor: 'pointer' }}
+      >
+        {/* Grid pattern */}
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.08, backgroundImage: 'linear-gradient(rgba(255,255,255,0.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.8) 1px,transparent 1px)', backgroundSize: '14px 14px', pointerEvents: 'none' }} />
+
+        <div style={{ position: 'relative', flex: 1 }}>
+          {/* Badges row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6, flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 800, background: cat.badgeBg, color: cat.badgeText, padding: '2px 8px', borderRadius: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <CatIcon size={9} />{room.category}
+            </span>
+            {room.status === 'live' && <span style={{ fontSize: 9, fontWeight: 800, background: '#C82718', color: '#fff', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
+            {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 700, background: 'rgba(0,0,0,0.3)', color: cat.headerText, padding: '2px 7px', borderRadius: 8 }}><Lock size={8} />PRIVATE</span>}
+          </div>
+
+          <h3 style={{ fontFamily: '"Bricolage Grotesque",serif', fontSize: 16, fontWeight: 800, color: cat.headerText, margin: '0 0 2px', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
+            {room.name}
+          </h3>
+          <p style={{ fontSize: 11, color: `${cat.headerText}aa`, margin: 0, fontWeight: 500 }}>by {room.host_name}</p>
+        </div>
+
+        {/* Category image */}
+        <img src={cat.image} alt="" style={{ width: 52, height: 52, objectFit: 'contain', flexShrink: 0, position: 'relative', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }} />
+      </div>
+
+      {/* ── Card body ── */}
+      <div style={{ padding: '12px 16px 14px' }}>
+        {/* WHEN / WHERE / WHAT rows */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
+          {whenValue && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.text }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {room.category === 'pasabuy' ? <Clock size={11} style={{ color: accentColor }} /> : <Calendar size={11} style={{ color: accentColor }} />}
+              </div>
+              <span style={{ fontWeight: 600 }}>{whenValue}</span>
+            </div>
+          )}
+          {whereValue && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.textMuted }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {room.category === 'gaming' ? <Gamepad2 size={11} style={{ color: accentColor }} /> : <MapPin size={11} style={{ color: accentColor }} />}
+              </div>
+              <span>{whereValue}</span>
+            </div>
+          )}
+          {whatValue && room.category !== 'pasabuy' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: T.textMuted }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CatIcon size={11} style={{ color: accentColor }} />
+              </div>
+              <span>{whatValue}</span>
+            </div>
+          )}
+          {room.category === 'pasabuy' && whatValue && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12, color: T.textMuted }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: `${accentColor}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                <ShoppingBasket size={11} style={{ color: accentColor }} />
+              </div>
+              <span style={{ lineHeight: 1.4 }}>{whatValue}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Description */}
+        {room.description && (
+          <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 10px', lineHeight: 1.5, borderLeft: `2px solid ${accentColor}55`, paddingLeft: 8 }}>
+            {room.description.length > 100 ? room.description.slice(0, 100) + '…' : room.description}
+          </p>
+        )}
+
+        {/* Member bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ flex: 1, height: 5, borderRadius: 3, background: T.surfaceAlt, overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: pct >= 90 ? '#C82718' : accentColor, transition: 'width 400ms ease' }} />
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, flexShrink: 0 }}>
+            {room.member_count}/{room.max_members} {memberLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Join action ── */}
+      {userId && !isOwn && (
+        <div style={{ borderTop: `1px solid ${T.border}`, padding: '10px 14px', background: `${accentColor}0a` }}>
+          {reqState === 'pending' || reqState === 'approved' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#15803D', fontWeight: 600 }}>
+              <Check size={14} />
+              {reqState === 'approved' ? 'Request approved!' : 'Request sent — awaiting approval'}
+            </div>
+          ) : isOpen ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input
+                value={requestMsg}
+                onChange={e => onRequestMsg(e.target.value)}
+                placeholder="Optional message to the host…"
+                maxLength={120}
+                style={{ width: '100%', height: 40, padding: '0 12px', fontSize: 13, fontFamily: 'inherit', border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.surface, color: T.text, outline: 'none', boxSizing: 'border-box' as const }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={onSendRequest} disabled={reqState === 'sending'}
+                  style={{ flex: 1, height: 36, borderRadius: 18, border: 'none', background: cat.headerBg, color: cat.headerText, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  <Send size={13} /> {reqState === 'sending' ? 'Sending…' : 'Send Request'}
+                </button>
+                <button onClick={onCancelRequest}
+                  style={{ height: 36, padding: '0 14px', borderRadius: 18, border: `1.5px solid ${T.border}`, background: 'none', color: T.textMuted, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {joinError && (
+                <p style={{ fontSize: 11, color: '#B91C1C', background: '#FEE2E2', padding: '6px 10px', borderRadius: 8, margin: '0 0 8px' }}>{joinError}</p>
+              )}
+              <button onClick={onOpenRequest}
+                style={{ width: '100%', height: 36, borderRadius: 18, border: `1.5px solid ${accentColor}`, background: `${accentColor}18`, color: accentColor, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Send size={13} />
+                {room.category === 'pasabuy' ? 'Apply as Agent' : 'Request to Join'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function makeRoomIcon(color: string) {
   return L.divIcon({
@@ -71,6 +300,8 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
   const [requestStates, setRequestStates] = useState<Record<string, string>>({});
   const [requestMsg, setRequestMsg] = useState('');
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [detailRoomId, setDetailRoomId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
@@ -101,11 +332,11 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
   const { rooms, roomsWithCoords, locationGroups, loading, total } =
     useExploreRooms(search, category, center, radiusKm);
 
+  // Show all rooms by default; filter by location group or map center when active.
+  // PasaBuy rooms have no lat/lng so they must always be reachable without a map filter.
   const displayRooms = selectedLoc
     ? rooms.filter(r => (r.location_name ?? 'No location set') === selectedLoc)
-    : center
-      ? rooms
-      : null;
+    : rooms;
 
   const checkRequestStatus = async (roomId: string) => {
     if (!userId || requestStates[roomId]) return;
@@ -113,17 +344,26 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
     setRequestStates(prev => ({ ...prev, [roomId]: status }));
   };
 
+  const [joinError, setJoinError] = useState<Record<string, string>>({});
+
   const handleRequestJoin = async (roomId: string, roomName: string) => {
-    if (!userId || !profile) return;
+    if (!userId) return;
+    const displayName = profile?.display_name ?? roomName;
     setRequestStates(prev => ({ ...prev, [roomId]: 'sending' }));
+    setJoinError(prev => ({ ...prev, [roomId]: '' }));
     const { error } = await submitJoinRequest(
       userId, roomId,
-      profile.display_name ?? roomName,
+      displayName,
       requestMsg.trim() || undefined,
     );
-    setRequestStates(prev => ({ ...prev, [roomId]: error ? 'none' : 'pending' }));
-    setRequestingId(null);
-    setRequestMsg('');
+    if (error) {
+      setRequestStates(prev => ({ ...prev, [roomId]: 'none' }));
+      setJoinError(prev => ({ ...prev, [roomId]: error }));
+    } else {
+      setRequestStates(prev => ({ ...prev, [roomId]: 'pending' }));
+      setRequestingId(null);
+      setRequestMsg('');
+    }
   };
 
   const openMapDialog = () => {
@@ -196,7 +436,7 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
             </div>
           </div>
           <div style={{ flex: '0 0 45%', position: 'relative', overflow: 'hidden' }}>
-            <img src={selectedCat.image ?? '/cover.png'} alt={selectedCat.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
+            <img src={selectedCat.image ?? 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/cover.png'} alt={selectedCat.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top' }} />
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to left, rgba(0,0,0,0) 50%, rgba(0,0,0,0.25) 100%)' }} />
           </div>
         </div>
@@ -350,88 +590,29 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
 
         {/* ── Room cards ── */}
         {displayRooms && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {displayRooms.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '32px 0', color: T.textMuted }}>
                 <p style={{ fontSize: 14, margin: 0 }}>No rooms here yet.</p>
               </div>
             ) : (
-              displayRooms.map(room => {
-                const cat = CATEGORY_COLORS[room.category] ?? { primary: T.primary, light: T.surfaceAlt, text: T.primary };
-                return (
-                <div key={room.id}
-                  style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderLeft: `4px solid ${cat.primary}`, borderRadius: 16, overflow: 'hidden', transition: 'box-shadow 150ms ease' }}
-                  onMouseEnter={e => { checkRequestStatus(room.id); (e.currentTarget.style.boxShadow = `4px 4px 0 ${cat.primary}40`); }}
-                  onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
-                >
-                  <div style={{ padding: '14px 16px' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, background: cat.light, color: cat.text, padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{room.category}</span>
-                          {room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: T.accent, color: '#fff', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
-                          {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, background: T.border, color: T.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} />PRIVATE</span>}
-                        </div>
-                        <p className="font-display" style={{ fontSize: 15, fontWeight: 700, color: T.text, margin: '0 0 2px' }}>{room.name}</p>
-                        <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>by {room.host_name}</p>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: T.textMuted, flexShrink: 0 }}>
-                        <Users size={13} />
-                        <span>{room.member_count}/{room.max_members}</span>
-                      </div>
-                    </div>
-                    {room.description && <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 6px', lineHeight: 1.5 }}>{room.description}</p>}
-                    {room.location_name && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: T.textMuted, marginBottom: 4 }}>
-                        <MapPin size={12} /><span>{room.location_name}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {userId && room.user_id !== userId && (() => {
-                    const reqState = requestStates[room.id] ?? 'none';
-                    const isOpen = requestingId === room.id;
-                    return (
-                      <div style={{ borderTop: `1px solid ${T.border}`, padding: '10px 14px', background: T.surfaceAlt }}>
-                        {reqState === 'pending' || reqState === 'approved' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, color: '#15803D', fontWeight: 600 }}>
-                            <Check size={14} />
-                            {reqState === 'approved' ? 'Request approved!' : 'Request sent — awaiting approval'}
-                          </div>
-                        ) : isOpen ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <input
-                              value={requestMsg}
-                              onChange={e => setRequestMsg(e.target.value)}
-                              placeholder="Optional message to the host…"
-                              maxLength={120}
-                              style={{ width: '100%', height: 40, padding: '0 12px', fontSize: 13, fontFamily: 'inherit', border: `1.5px solid ${T.border}`, borderRadius: 10, background: T.surface, color: T.text, outline: 'none', boxSizing: 'border-box' }}
-                            />
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button onClick={() => handleRequestJoin(room.id, room.name)}
-                                disabled={reqState === 'sending'}
-                                style={{ flex: 1, height: 36, borderRadius: 18, border: 'none', background: T.primary, color: T.bg, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                <Send size={13} /> {reqState === 'sending' ? 'Sending…' : 'Send Request'}
-                              </button>
-                              <button onClick={() => { setRequestingId(null); setRequestMsg(''); }}
-                                style={{ height: 36, padding: '0 14px', borderRadius: 18, border: `1.5px solid ${T.border}`, background: 'none', color: T.textMuted, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}>
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => { checkRequestStatus(room.id); setRequestingId(room.id); }}
-                            style={{ width: '100%', height: 36, borderRadius: 18, border: `1.5px solid ${T.primary}`, background: `${T.primary}12`, color: T.primary, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                            <Send size={13} /> Request to Join
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-                );
-              })
+              displayRooms.map(room => (
+                <RoomCard
+                  key={room.id}
+                  room={room}
+                  userId={userId}
+                  outerTheme={T}
+                  reqState={requestStates[room.id] ?? 'none'}
+                  requestingId={requestingId}
+                  requestMsg={requestMsg}
+                  joinError={joinError[room.id]}
+                  onRequestMsg={setRequestMsg}
+                  onOpenRequest={() => { checkRequestStatus(room.id); setRequestingId(room.id); }}
+                  onSendRequest={() => handleRequestJoin(room.id, room.name)}
+                  onCancelRequest={() => { setRequestingId(null); setRequestMsg(''); setJoinError(prev => ({ ...prev, [room.id]: '' })); }}
+                  onOpenDetail={() => setDetailRoomId(room.id)}
+                />
+              ))
             )}
           </div>
         )}
@@ -440,7 +621,6 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
       {/* ── Map picker dialog ── */}
       {mapDialogOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', padding: '20px' }}
-          onClick={e => { if (e.target === e.currentTarget) setMapDialogOpen(false); }}
         >
           <div style={{ width: '100%', maxWidth: 580, background: T.bg, borderRadius: 20, border: `2px solid ${T.border}`, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 40px)', boxShadow: '0 24px 64px rgba(0,0,0,0.3)' }}>
             {/* Dialog header */}
@@ -527,6 +707,145 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
           </div>
         </div>
       )}
+
+      {/* ── Room Detail Dialog ── */}
+      {detailRoomId && (() => {
+        const dr = rooms.find(r => r.id === detailRoomId);
+        if (!dr) return null;
+        const cat = CAT_STYLE[dr.category] ?? CAT_STYLE.rotary;
+        const isDarkSurface = parseInt(T.surface.replace('#', '').slice(0, 2), 16) < 100;
+        const accentColor = isDarkSurface ? cat.headerText : cat.headerBg;
+        const fill = Math.min((dr.member_count / dr.max_members) * 100, 100);
+        const eventDisplay = dr.event_date ? formatEventDate(dr.event_date) : dr.next_event;
+        const hasItinerary = dr.itinerary && dr.itinerary.length > 0;
+        const isItinExpanded = expandedId === dr.id;
+        const socials = [
+          dr.facebook_url  && { url: dr.facebook_url,  Icon: FacebookIcon,  color: '#1877F2' },
+          dr.instagram_url && { url: dr.instagram_url, Icon: InstagramIcon, color: '#E4405F' },
+          dr.twitter_url   && { url: dr.twitter_url,   Icon: TwitterIcon,   color: '#1DA1F2' },
+          ...(dr.other_socials ?? []).filter(s => s.url).map(s => ({ url: s.url, Icon: null, label: s.label, color: accentColor })),
+        ].filter(Boolean) as { url: string; Icon: any; color: string; label?: string }[];
+
+        return (
+          <div
+            onMouseDown={e => { if (e.target === e.currentTarget) (e.currentTarget as HTMLDivElement).dataset.dismissing = '1'; }}
+            onMouseUp={e => { if (e.target === e.currentTarget && (e.currentTarget as HTMLDivElement).dataset.dismissing === '1') setDetailRoomId(null); (e.currentTarget as HTMLDivElement).dataset.dismissing = ''; }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 16px', fontFamily: '"DM Sans", system-ui, sans-serif' }}
+          >
+            <div style={{ width: '100%', maxWidth: 540, maxHeight: '90vh', overflowY: 'auto', background: T.surface, borderRadius: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
+
+              {/* Header */}
+              <div style={{ padding: '18px 20px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 11, fontFamily: '"VT323", monospace', color: accentColor, margin: '0 0 2px', letterSpacing: 1 }}>
+                    {dr.category === 'gaming' ? 'GAMING LOBBY' : dr.category === 'cafe' ? 'CAFE HANGOUT' : dr.category === 'pasabuy' ? 'PASABUY REQUEST' : 'ROTARY ROOM'}
+                  </p>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: '0 0 6px', lineHeight: 1.2, fontFamily: '"Bricolage Grotesque", serif', letterSpacing: '-0.02em' }}>{dr.name}</h2>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {dr.status === 'confirmed' && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
+                    {dr.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
+                    {dr.is_private && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: T.surfaceAlt, color: T.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} /> PRIVATE</span>}
+                    {dr.user_id === userId && <span style={{ fontSize: 10, fontWeight: 700, background: accentColor, color: isDarkSurface ? '#0a0a0a' : '#fff', padding: '2px 8px', borderRadius: 8 }}>YOUR ROOM</span>}
+                  </div>
+                </div>
+                <button onClick={() => setDetailRoomId(null)} style={{ width: 36, height: 36, borderRadius: '50%', background: T.surfaceAlt, border: `1.5px solid ${T.border}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textMuted, flexShrink: 0 }}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              <p style={{ padding: '10px 20px 0', fontSize: 13, color: T.textMuted, margin: 0 }}>
+                Hosted by <strong style={{ color: T.text }}>{dr.host_name}</strong>
+              </p>
+
+              {/* Quick chips */}
+              {(dr.game_name || eventDisplay || dr.location_name) && (
+                <div style={{ padding: '10px 20px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {dr.game_name && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 14 }}>🎮</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{dr.game_name}</span>
+                    </div>
+                  )}
+                  {eventDisplay && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 14 }}>📅</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{eventDisplay}</span>
+                    </div>
+                  )}
+                  {dr.location_name && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: T.surfaceAlt, border: `1px solid ${T.border}` }}>
+                      <MapPin size={13} style={{ color: accentColor, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text }}>{dr.location_name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Members bar */}
+              <div style={{ margin: '14px 20px 0', padding: '14px', background: T.surfaceAlt, borderRadius: 16, border: `1px solid ${T.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                    <Users size={13} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                    {dr.category === 'gaming' ? 'Players' : dr.category === 'cafe' ? 'Guests' : dr.category === 'pasabuy' ? 'Agents' : 'Members'}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>{dr.member_count} / {dr.max_members}</span>
+                </div>
+                <div style={{ height: 6, background: T.surface, borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: accentColor, transition: 'width 600ms' }} />
+                </div>
+              </div>
+
+              {/* Description */}
+              {dr.description && (
+                <div style={{ margin: '14px 20px 0', padding: '14px', background: T.surfaceAlt, borderRadius: 16, border: `1px solid ${T.border}` }}>
+                  <pre style={{ fontSize: 13, color: T.text, margin: 0, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{dr.description}</pre>
+                </div>
+              )}
+
+              {/* Social links */}
+              {socials.length > 0 && (
+                <div style={{ padding: '14px 20px 0', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {socials.map((s, i) => s.Icon
+                    ? <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ width: 36, height: 36, borderRadius: 10, background: `${s.color}18`, border: `1px solid ${s.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}><s.Icon size={16} color={s.color} /></a>
+                    : <a key={i} href={s.url} target="_blank" rel="noreferrer" style={{ padding: '6px 12px', borderRadius: 10, background: `${accentColor}12`, border: `1px solid ${accentColor}33`, display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 600, color: accentColor, textDecoration: 'none', gap: 4 }}>🔗 {s.label || 'Link'}</a>
+                  )}
+                </div>
+              )}
+
+              {/* Itinerary (Rotary only) */}
+              {hasItinerary && (
+                <div style={{ margin: '14px 20px 0', borderRadius: 16, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                  <button
+                    onClick={() => setExpandedId(isItinExpanded ? null : dr.id)}
+                    style={{ width: '100%', padding: '12px 16px', background: T.surfaceAlt, border: 'none', borderBottom: isItinExpanded ? `1px solid ${T.border}` : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontFamily: 'inherit' }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>📋 Itinerary ({dr.itinerary.length} steps)</span>
+                    {isItinExpanded ? <ChevronUp size={14} style={{ color: T.textMuted }} /> : <ChevronDown size={14} style={{ color: T.textMuted }} />}
+                  </button>
+                  {isItinExpanded && (
+                    <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {dr.itinerary.map((item, idx) => (
+                        <div key={item.id} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                          <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${accentColor}18`, border: `1.5px solid ${accentColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: accentColor, flexShrink: 0 }}>{idx + 1}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              {item.time && <span style={{ fontSize: 12, color: T.textMuted, fontWeight: 600 }}>{item.time}</span>}
+                              <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{item.title}</span>
+                            </div>
+                            {item.description && <p style={{ fontSize: 12, color: T.textMuted, margin: '2px 0 0', lineHeight: 1.4 }}>{item.description}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{ height: 32 }} />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

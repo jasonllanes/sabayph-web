@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
-  Moon, Sun, ShoppingBasket, HeartHandshake, Gamepad2, Coffee,
+  Moon, Sun, ShoppingBasket, HeartHandshake, Gamepad2, Coffee, ShieldAlert,
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { isAdmin } from '@/lib/admin';
+import AdminPanel from '@/components/admin/AdminPanel';
+import type { DiscoverProfile } from '@/types';
 import { useScreenSize } from '@/hooks/useScreenSize';
 import { useProfile } from '@/hooks/useProfile';
 import { THEMES } from '@/data/themes';
@@ -17,6 +21,9 @@ import FriendsTab from './FriendsTab';
 import MessagesTab from './MessagesTab';
 import { useUnreadCount } from '@/hooks/useMessages';
 import { usePendingFriendsCount, usePendingRoomsCount } from '@/hooks/useBadgeCounts';
+import { useAcceptedBookings } from '@/hooks/useRoomChat';
+import ProfileViewModal from './ProfileViewModal';
+import { useConnections } from '@/hooks/useConnections';
 
 // ─── Theme modes ──────────────────────────────────────────────────────────────
 
@@ -88,6 +95,7 @@ const TAB_LABELS: Record<TabId, string> = {
 interface AppShellProps {
   user: User | null;
   onLogout: () => void;
+  initialProfileTag?: string;
 }
 
 // ─── Theme Mode Selector ──────────────────────────────────────────────────────
@@ -181,7 +189,7 @@ function ThemeModeSelector({
 
 // ─── App Shell ────────────────────────────────────────────────────────────────
 
-export default function AppShell({ user, onLogout }: AppShellProps) {
+export default function AppShell({ user, onLogout, initialProfileTag }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const saved = localStorage.getItem('sabayph_active_tab') as TabId | null;
     const valid: TabId[] = ['discover', 'rooms', 'explore', 'friends', 'messages', 'profile'];
@@ -192,7 +200,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
     setActiveTab(tab);
     localStorage.setItem('sabayph_active_tab', tab);
   };
-
+  const [showAdmin, setShowAdmin] = useState(false);
   const [activeCategory, setActiveCategory] = useState<ThemeKey>('heritage');
   const [exploreCategory, setExploreCategory] = useState<import('@/types').CategoryId | null>(null);
 
@@ -216,6 +224,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
   const unreadMessages = useUnreadCount(user?.id);
   const pendingFriends  = usePendingFriendsCount(user?.id);
   const pendingRooms    = usePendingRoomsCount(user?.id);
+  const { bookings: acceptedBookings } = useAcceptedBookings(user?.id);
   const userEmail  = user?.email ?? user?.user_metadata?.email ?? 'kasama@sabayph.com';
   const googleName: string = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
   const userName   = profile?.display_name || googleName || userEmail.split('@')[0];
@@ -230,9 +239,80 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
     document.documentElement.style.backgroundColor = theme.bg;
   }, [theme.bg]);
 
+  // Deep-link: open profile by kasama_tag from ?profile= URL param
+  const [deepLinkProfile, setDeepLinkProfile] = useState<DiscoverProfile | null>(null);
+  const [connLoading, setConnLoading] = useState(false);
+  const deepLinkFetched = useRef(false);
+  const { getStatus, getConnection, sendRequest, acceptRequest, removeConnection, tableReady, error: connError } = useConnections(user?.id);
+  useEffect(() => {
+    if (!initialProfileTag || deepLinkFetched.current) return;
+    deepLinkFetched.current = true;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined, avatar_url')
+        .eq('kasama_tag', initialProfileTag)
+        .single();
+      if (data) setDeepLinkProfile(data as DiscoverProfile);
+    })();
+  }, [initialProfileTag]);
+
   const onCategoryChange = useCallback((val: ThemeKey | ((prev: ThemeKey) => ThemeKey)) => {
     setActiveCategory(typeof val === 'function' ? val(activeCategory) : val);
   }, [activeCategory]);
+
+  // Persistent accepted-booking banner — shown to the courier who was accepted
+  const BookingBanner = acceptedBookings.length > 0 ? (
+    <button
+      onClick={() => handleTabChange('messages')}
+      style={{
+        flexShrink: 0, width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+        padding: '9px 16px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+        background: 'linear-gradient(90deg,#D97706,#B45309)',
+        boxShadow: '0 2px 8px rgba(180,83,9,0.35)',
+      }}
+    >
+      <span style={{ fontSize: 20, flexShrink: 0 }}>📦</span>
+      <div style={{ flex: 1, textAlign: 'left' }}>
+        <p style={{ fontSize: 12, fontWeight: 800, color: '#fff', margin: 0, letterSpacing: 0.2 }}>
+          You've been accepted as courier!
+        </p>
+        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', margin: 0 }}>
+          {acceptedBookings[0].room_name} · {acceptedBookings[0].join_code} — tap to open tracking chat
+        </p>
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'rgba(255,255,255,0.22)', padding: '4px 10px', borderRadius: 10, flexShrink: 0 }}>
+        Open →
+      </span>
+    </button>
+  ) : null;
+
+  const AdminButton = () => isAdmin(userEmail) ? (
+    <button
+      onClick={() => setShowAdmin(true)}
+      title="Admin Panel"
+      style={{ width: 34, height: 34, borderRadius: '50%', background: isDark ? '#2A405A' : theme.surfaceAlt, border: `1.5px solid ${theme.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#C82718', transition: 'all 250ms ease', flexShrink: 0 }}
+    >
+      <ShieldAlert size={16} />
+    </button>
+  ) : null;
+
+  const DarkToggle = () => (
+    <button
+      onClick={toggleDark}
+      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      style={{
+        width: 34, height: 34, borderRadius: '50%',
+        background: isDark ? '#2A405A' : theme.surfaceAlt,
+        border: `1.5px solid ${theme.border}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', color: isDark ? '#EEA64C' : theme.textMuted,
+        transition: 'all 250ms ease', flexShrink: 0,
+      }}
+    >
+      {isDark ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  );
 
   const renderTab = () => {
     switch (activeTab) {
@@ -274,12 +354,13 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
 
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: `${theme.bg}F0`, borderBottom: `1.5px solid ${theme.border}`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', transition: 'all 600ms ease' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="/sabayph_logo.png" alt="SabayPH" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', border: `2px solid ${theme.primary}` }} />
+            <img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png" alt="SabayPH" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', border: `2px solid ${theme.primary}` }} />
             <span className="font-display" style={{ fontSize: 18, fontWeight: 800, color: theme.text }}>
               Sabay<span style={{ color: theme.primary }}>PH</span>
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AdminButton />
             <ThemeModeSelector mode={themeMode} onSetMode={handleSetMode} theme={theme} />
             <div
               style={{ width: 34, height: 34, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: `2px solid ${theme.border}`, overflow: 'hidden', position: 'relative', flexShrink: 0 }}
@@ -291,6 +372,8 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
           </div>
         </div>
 
+        {BookingBanner}
+
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}>
           <div key={activeTab} className="tab-enter">
             {renderTab()}
@@ -300,6 +383,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
         <div data-bottomnav>
           <BottomNav activeTab={activeTab} onTabChange={handleTabChange} theme={theme} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} profileCompleted={!!profile?.profile_completed} />
         </div>
+        {showAdmin && <AdminPanel userId={user?.id} userEmail={userEmail} onClose={() => setShowAdmin(false)} />}
       </div>
     );
   }
@@ -325,6 +409,7 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <AdminButton />
             <ThemeModeSelector mode={themeMode} onSetMode={handleSetMode} theme={theme} />
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontSize: 14, fontWeight: 700, color: theme.text, margin: 0 }}>{userName}</p>
@@ -339,12 +424,45 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
           </div>
         </div>
 
+        {BookingBanner}
+
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
           <div key={activeTab} className="tab-enter" style={{ maxWidth: activeTab === 'discover' ? 900 : 800, margin: '0 auto', padding: '0 16px' }}>
             {renderTab()}
           </div>
         </div>
       </div>
+
+      {/* Deep-link profile modal (from ?profile=ksm-xxxx QR scan) */}
+      {deepLinkProfile && (
+        <ProfileViewModal
+          person={deepLinkProfile}
+          theme={theme}
+          currentUserId={user?.id}
+          connectionStatus={getStatus(deepLinkProfile.id)}
+          connectionLoading={connLoading}
+          connectionError={connError}
+          tableReady={tableReady}
+          connection={getConnection(deepLinkProfile.id)}
+          onSendRequest={async () => {
+            setConnLoading(true);
+            await sendRequest(deepLinkProfile.id);
+            setConnLoading(false);
+          }}
+          onAcceptRequest={async () => {
+            const conn = getConnection(deepLinkProfile.id);
+            if (conn) { setConnLoading(true); await acceptRequest(conn.id); setConnLoading(false); }
+          }}
+          onRemoveConnection={async () => {
+            const conn = getConnection(deepLinkProfile.id);
+            if (conn) { setConnLoading(true); await removeConnection(conn.id); setConnLoading(false); }
+          }}
+          onClose={() => setDeepLinkProfile(null)}
+        />
+      )}
+
+      {/* Admin panel overlay */}
+      {showAdmin && <AdminPanel userId={user?.id} userEmail={userEmail} onClose={() => setShowAdmin(false)} />}
     </div>
   );
 }

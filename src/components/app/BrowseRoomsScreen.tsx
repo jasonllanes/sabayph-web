@@ -34,7 +34,7 @@ interface BrowseRoomsScreenProps {
 export default function BrowseRoomsScreen({ categoryId, theme: T, userId, onBack }: BrowseRoomsScreenProps) {
   const category  = CATEGORIES.find(c => c.id === categoryId)!;
   const detail    = CATEGORY_DETAILS[categoryId];
-  const heroImage = category.image ?? '/cover.png';
+  const heroImage = category.image ?? 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/cover.png';
   // Always use the category's own brand theme for hero + accents, regardless of global mode
   const CT = THEMES[categoryId as keyof typeof THEMES] ?? T;
 

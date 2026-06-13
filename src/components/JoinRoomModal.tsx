@@ -28,11 +28,16 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
   const [pwError, setPwError] = useState('');
   const [joining, setJoining] = useState(false);
   const [joined, setJoined] = useState(false);
+  const [isHost, setIsHost] = useState(false);
 
   useEffect(() => {
-    fetchRoomByCode(joinCode).then(r => {
+    fetchRoomByCode(joinCode).then(async r => {
       setRoom(r);
       setNotFound(!r);
+      if (r) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id === r.user_id) setIsHost(true);
+      }
       setFetching(false);
     });
   }, [joinCode]);
@@ -100,6 +105,20 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
             </div>
           )}
 
+          {/* Host state */}
+          {!fetching && isHost && (
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>👑</div>
+              <h3 className="font-display" style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: '0 0 8px' }}>You're the host!</h3>
+              <p style={{ fontSize: 14, color: T.textMuted, margin: '0 0 20px' }}>
+                You created <strong style={{ color: T.text }}>{room?.name}</strong>. You're already in this room.
+              </p>
+              <button onClick={onClose} style={{ padding: '10px 24px', borderRadius: 24, border: 'none', background: T.primary, color: T.bg, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
+                Got it
+              </button>
+            </div>
+          )}
+
           {/* Joined success */}
           {joined && (
             <div style={{ textAlign: 'center', padding: '32px 0' }}>
@@ -112,16 +131,16 @@ export default function JoinRoomModal({ joinCode, onClose }: JoinRoomModalProps)
           )}
 
           {/* Room details */}
-          {!fetching && room && !joined && (
+          {!fetching && room && !joined && !isHost && (
             <>
               <div style={{ background: T.surfaceAlt, borderRadius: 16, padding: 16, marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
                   {room.category === 'gaming'
-                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#EDE9FE', color: '#7C3AED', padding: '3px 10px', borderRadius: 20, border: '1px solid #C4B5FD' }}><img src="/gaming.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Gaming</span>
+                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#EDE9FE', color: '#7C3AED', padding: '3px 10px', borderRadius: 20, border: '1px solid #C4B5FD' }}><img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/gaming.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Gaming</span>
                     : room.category === 'pasabuy'
                       ? <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3E2', color: '#D97706', padding: '3px 10px', borderRadius: 20, border: '1px solid #F9C07E' }}>PasaBuy</span>
                       : room.category === 'cafe'
-                        ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#92400E', padding: '3px 10px', borderRadius: 20, border: '1px solid #D97706AA' }}><img src="/coffee.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Cafe</span>
+                        ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#92400E', padding: '3px 10px', borderRadius: 20, border: '1px solid #D97706AA' }}><img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/coffee.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Cafe</span>
                         : <span style={{ fontSize: 11, fontWeight: 700, background: '#F4ECDF', color: '#9F5E0F', padding: '3px 10px', borderRadius: 20, border: '1px solid #9F5E0F44' }}>Rotary</span>
                   }
                   {room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}

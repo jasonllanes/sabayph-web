@@ -11,7 +11,20 @@ import { tagStyle, PRONOUNS, getDefaultAvatar } from '@/components/app/tagConsta
 import type { Theme, DiscoverProfile, Connection } from '@/types';
 
 const PROFILE_COLS =
+  'id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined, avatar_url, id_verified';
+
+// PROFILE_COLS_FALLBACK — excludes migration-dependent columns; always works
+const PROFILE_COLS_FALLBACK =
   'id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined';
+
+async function safeSelectProfiles(
+  q: (cols: string) => PromiseLike<{ data: any[] | null; error: any }>,
+): Promise<any[]> {
+  const { data, error } = await q(PROFILE_COLS);
+  if (!error && data !== null) return data;
+  const { data: fb } = await q(PROFILE_COLS_FALLBACK);
+  return fb ?? [];
+}
 
 function normProfile(r: any): DiscoverProfile {
   return {
@@ -22,6 +35,8 @@ function normProfile(r: any): DiscoverProfile {
     profile_completed: r.profile_completed ?? false, contact_phone: r.contact_phone ?? null,
     home_lat: r.home_lat ?? null,
     rooms_joined: r.rooms_joined ?? 0,
+    avatar_url:  r.avatar_url ?? null,
+    id_verified: r.id_verified ?? false,
   };
 }
 
@@ -76,8 +91,12 @@ function PersonRow({
         <span style={{ fontFamily: '"Bricolage Grotesque",serif', fontWeight: 800, fontSize: 18, color: T.bg, position: 'absolute' }}>
           {(person.display_name ?? '?').charAt(0).toUpperCase()}
         </span>
-        <img src={getDefaultAvatar(person.gender, person.profile_tags)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+        <img
+          src={person.avatar_url || getDefaultAvatar(person.gender, person.profile_tags)}
+          alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(person.gender, person.profile_tags); }}
+        />
         {person.is_online && (
           <span style={{ position: 'absolute', bottom: 1, right: 1, width: 12, height: 12, borderRadius: '50%', background: '#15803D', border: `2px solid ${T.surface}` }} />
         )}
@@ -132,9 +151,9 @@ export default function FriendsTab({ theme: T, userId }: FriendsTabProps) {
     const ids = connections.map(c => c.from_user_id === userId ? c.to_user_id : c.from_user_id);
     if (ids.length === 0) return;
     setProfilesLoading(true);
-    const { data } = await supabase.from('profiles').select(PROFILE_COLS).in('id', ids);
+    const data = await safeSelectProfiles(cols => supabase.from('profiles').select(cols).in('id', ids));
     const map: Record<string, DiscoverProfile> = {};
-    for (const r of data ?? []) map[r.id] = normProfile(r);
+    for (const r of data) map[r.id] = normProfile(r);
     setFriendProfiles(map);
     setProfilesLoading(false);
   }, [connections, userId]);
@@ -157,17 +176,19 @@ export default function FriendsTab({ theme: T, userId }: FriendsTabProps) {
     let results: DiscoverProfile[] = [];
 
     if (isUuid) {
-      const { data } = await supabase.from('profiles').select(PROFILE_COLS).eq('id', term).limit(1);
-      results = (data ?? []).map(normProfile);
+      const data = await safeSelectProfiles(cols => supabase.from('profiles').select(cols).eq('id', term).limit(1));
+      results = data.map(normProfile);
     } else if (term.startsWith('#')) {
       const tag = term.slice(1).trim();
-      const { data } = await supabase.from('profiles').select(PROFILE_COLS)
-        .contains('profile_tags', [tag]).neq('id', userId ?? '').limit(20);
-      results = (data ?? []).map(normProfile);
+      const data = await safeSelectProfiles(cols =>
+        supabase.from('profiles').select(cols).contains('profile_tags', [tag]).neq('id', userId ?? '').limit(20)
+      );
+      results = data.map(normProfile);
     } else {
-      const { data } = await supabase.from('profiles').select(PROFILE_COLS)
-        .ilike('display_name', `%${term}%`).neq('id', userId ?? '').limit(20);
-      results = (data ?? []).map(normProfile);
+      const data = await safeSelectProfiles(cols =>
+        supabase.from('profiles').select(cols).ilike('display_name', `%${term}%`).neq('id', userId ?? '').limit(20)
+      );
+      results = data.map(normProfile);
     }
 
     setSearchResults(results);
@@ -380,6 +401,7 @@ export default function FriendsTab({ theme: T, userId }: FriendsTabProps) {
         <ProfileViewModal
           person={viewingProfile}
           theme={T}
+          currentUserId={userId}
           connectionStatus={getStatus(viewingProfile.id)}
           connectionLoading={connLoading}
           connectionError={connError}

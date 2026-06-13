@@ -101,7 +101,12 @@ function PersonCard({ person, theme: T, onView, compact }: { person: DiscoverPro
             <span style={{ fontFamily: '"Bricolage Grotesque",serif', fontWeight: 800, fontSize: 18, color: T.bg, position: 'absolute' }}>
               {(person.display_name ?? '?').charAt(0).toUpperCase()}
             </span>
-            <img src={getDefaultAvatar(person.gender, person.profile_tags)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            <img
+              src={person.avatar_url || getDefaultAvatar(person.gender, person.profile_tags)}
+              alt=""
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+              onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatar(person.gender, person.profile_tags); }}
+            />
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
@@ -890,7 +895,9 @@ export default function DiscoverTab({
       )}
       {viewingProfile && (
         <ProfileViewModal
-          person={viewingProfile} theme={T}
+          person={viewingProfile}
+          theme={theme}
+          currentUserId={userId}
           connectionStatus={getStatus(viewingProfile.id)}
           connectionLoading={connLoading} connectionError={connError} tableReady={tableReady}
           connection={getConnection(viewingProfile.id)}

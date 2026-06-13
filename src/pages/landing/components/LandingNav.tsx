@@ -28,7 +28,7 @@ export function LandingNav({ theme, onLoginClick, scrollTo }: LandingNavProps) {
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-12">
         <div className="flex items-center gap-2">
-          <img src="/logo.png" alt="SabayPH mascot" className="h-10 w-10 object-contain" />
+          <img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/logo.png" alt="SabayPH mascot" className="h-10 w-10 object-contain" />
           <span className="font-display text-xl font-bold" style={{ color: theme.text }}>
             Sabay<span style={{ color: theme.accent }}>PH</span>
           </span>

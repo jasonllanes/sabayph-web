@@ -2,11 +2,14 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { DiscoverProfile } from '@/types';
 
+// FULL_COLS — includes migration-dependent columns (avatar_url, id_verified)
 const FULL_COLS =
-  'id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined';
+  'id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined, avatar_url, id_verified';
 
+// BASE_COLS — stable columns that have always existed; used as fallback when a migration hasn't been run.
+// Must include profile_tags, is_online, contact_phone so the UI stays fully functional.
 const BASE_COLS =
-  'id, display_name, age_range, location, bio, gender, kasama_rating, rating_count, profile_completed, home_lat, rooms_joined';
+  'id, display_name, age_range, location, bio, gender, profile_tags, kasama_rating, rating_count, is_online, profile_completed, contact_phone, home_lat, rooms_joined';
 
 function normalise(rows: any[]): DiscoverProfile[] {
   return rows.map(r => ({
@@ -24,6 +27,8 @@ function normalise(rows: any[]): DiscoverProfile[] {
     contact_phone:    r.contact_phone ?? null,
     home_lat:         r.home_lat ?? null,
     rooms_joined:     r.rooms_joined ?? 0,
+    avatar_url:       r.avatar_url ?? null,
+    id_verified:      r.id_verified ?? false,
   }));
 }
 

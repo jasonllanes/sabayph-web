@@ -102,7 +102,7 @@ export default function SplashScreen({ onDone }: SplashScreenProps) {
             opacity: phase >= 1 ? 1 : 0,
           }}
         >
-          <img src="/sabayph_logo.png" alt="SabayPH" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png" alt="SabayPH" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
 
         <div style={{ height: 32 }} />

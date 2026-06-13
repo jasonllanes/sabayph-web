@@ -32,6 +32,8 @@ export function useRoomJoinRequests(ownedRoomIds: string[]) {
   useEffect(() => { refresh(); }, [refresh]);
 
   const approveRequest = async (req: JoinRequest) => {
+    const { data: { user } } = await supabase.auth.getUser();
+
     await Promise.all([
       supabase.from('join_requests').update({ status: 'approved' }).eq('id', req.id),
       supabase.from('room_members').upsert({ room_id: req.room_id, user_id: req.user_id }, { onConflict: 'room_id,user_id' }),
@@ -40,7 +42,21 @@ export function useRoomJoinRequests(ownedRoomIds: string[]) {
           supabase.from('rooms').update({ member_count: (data?.member_count ?? 0) + 1 }).eq('id', req.room_id)
         );
       }),
+      // Close the room — no new applications accepted after this
+      supabase.from('rooms').update({ status: 'confirmed' }).eq('id', req.room_id),
     ]);
+
+    // Post the system message that bootstraps the tracking group chat
+    if (user?.id) {
+      await supabase.from('room_messages').insert({
+        room_id: req.room_id,
+        sender_id: user.id,
+        sender_name: 'SabayPH',
+        content: `✅ Booking confirmed! ${req.display_name ?? 'Your agent'} has been accepted as courier. Welcome to your tracking group chat — use this to coordinate the delivery!`,
+        is_system: true,
+      });
+    }
+
     await refresh();
   };
 

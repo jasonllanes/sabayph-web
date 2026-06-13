@@ -13,7 +13,7 @@ export interface RoomFormData {
   max_members: number;
   next_event: string;
   event_date: string;
-  status: 'live' | 'soon';
+  status: 'live' | 'soon' | 'confirmed' | 'completed' | 'cancelled';
   category: string;
   member_count: number;
   join_code: string;
@@ -122,7 +122,6 @@ export default function RoomFormModal({ theme: T, editing, onClose, onSubmit }: 
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div style={{ width: '100%', maxWidth: 500, background: T.surface, borderRadius: 24, padding: '28px 28px 32px', maxHeight: '90vh', overflowY: 'auto', fontFamily: '"DM Sans", system-ui, sans-serif', boxShadow: '0 24px 64px rgba(0,0,0,0.25)' }}>
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=VT323&display=swap'); .font-display{font-family:'Bricolage Grotesque',serif;letter-spacing:-0.02em;} .font-pixel{font-family:'VT323',monospace;}`}</style>

@@ -43,6 +43,7 @@ export function useExploreRooms(
 
   const filtered = useMemo(() => {
     return allRooms.filter(room => {
+      if (room.status === 'confirmed') return false; // closed — booking matched
       if (category && room.category !== category) return false;
 
       if (search.trim()) {
