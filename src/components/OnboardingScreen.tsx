@@ -22,7 +22,6 @@ const PAGES: OnboardingPage[] = [
     image: '/cover.png', pixel: 'TARA, SABAY TAYO!',
     title: 'Find your people, anywhere.',
     body: 'Browse rooms by activity, join verified groups, and go further together. No more solo adventures.',
-    image: '/cover.png',
   },
   {
     bg: '#F4ECDF', surface: '#FFFFFF', primary: '#9F5E0F', accent: '#C82718',
@@ -30,12 +29,11 @@ const PAGES: OnboardingPage[] = [
     image: '/safe.png', pixel: 'LIGTAS AT MAPAGKAKATIWALAAN',
     title: 'Safety is not optional.',
     body: 'Every SabayPH member is verified. Reputation follows you. Organizers stay in control, so everyone feels safe.',
-    image: '/safe.png',
   },
   {
     bg: '#EDF5EF', surface: '#FFFFFF', primary: '#1B6B3A', accent: '#C82718',
-    text: '#0D3320', textMuted: '#3D6B4A', border: '#9ECAAA', deco: '#72B882',
-    image: IMG('stand_normal.png'), pixel: 'HANDA KA NA!',
+    highlight: '#72B882', text: '#0D3320', textMuted: '#3D6B4A', border: '#9ECAAA',
+    image: '/avatar.png', pixel: 'HANDA KA NA!',
     title: "You're all set!",
     body: "Your kasama is out there. Explore rooms, meet verified members, and start your next adventure. Kita kits!",
   },
