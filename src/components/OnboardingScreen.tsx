@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowRight, ChevronLeft } from 'lucide-react';
+import { ArrowRight, ChevronLeft, Users, Shield, Sparkles } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 
 interface OnboardingPage {
