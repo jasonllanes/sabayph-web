@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Plus, Edit2, Trash2, Loader, Copy, Share2, Check, Lock, MapPin, ChevronDown, ChevronUp, UserCheck, UserX, Bell, ShoppingBasket, HeartHandshake } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Copy, Share2, Check, Lock, MapPin, ChevronDown, ChevronUp, UserCheck, UserX, Bell, ShoppingBasket, HeartHandshake } from 'lucide-react';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import { useRooms } from '@/hooks/useRooms';
@@ -11,6 +11,41 @@ import { supabase } from '@/lib/supabase';
 import type { Theme, Room } from '@/types';
 
 type RoomCategory = 'rotary' | 'pasabuy' | 'gaming' | 'cafe';
+
+function RoomsSkeletonList({ theme: T }: { theme: Theme }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+      <style>{`@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}} .sk-rm{border-radius:8px;background:linear-gradient(90deg,${T.surfaceAlt} 25%,${T.border} 50%,${T.surfaceAlt} 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear}`}</style>
+      {[0, 1, 2].map(i => (
+        <div key={i} style={{ background: T.surface, border: `2px solid ${T.border}`, borderRadius: 18, overflow: 'hidden' }}>
+          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div className="sk-rm" style={{ width: 70, height: 22, borderRadius: 20 }} />
+              <div className="sk-rm" style={{ width: 50, height: 22, borderRadius: 20 }} />
+            </div>
+            <div className="sk-rm" style={{ width: '70%', height: 20 }} />
+            <div className="sk-rm" style={{ width: '45%', height: 14, borderRadius: 6 }} />
+            <div style={{ marginTop: 4 }}>
+              <div className="sk-rm" style={{ width: 100, height: 12, marginBottom: 6, borderRadius: 6 }} />
+              <div className="sk-rm" style={{ height: 5, borderRadius: 3 }} />
+            </div>
+            <div className="sk-rm" style={{ height: 36, borderRadius: 10 }} />
+          </div>
+          <div style={{ borderTop: `1px solid ${T.border}`, padding: '10px 16px', background: T.surfaceAlt, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              <div className="sk-rm" style={{ width: 60, height: 9, borderRadius: 4 }} />
+              <div className="sk-rm" style={{ width: 80, height: 18, borderRadius: 6 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div className="sk-rm" style={{ width: 80, height: 32, borderRadius: 20 }} />
+              <div className="sk-rm" style={{ width: 100, height: 32, borderRadius: 20 }} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 interface RoomsTabProps { theme: Theme; userId?: string; }
 
@@ -29,10 +64,10 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
   const [roomsView, setRoomsView] = useState<'active' | 'archived'>('active');
   const [requestsExpandedId, setRequestsExpandedId] = useState<string | null>(null);
 
-  const pasabuyTheme = THEMES.pasabuy;
-  const gamingTheme = { ...T, primary: '#7C3AED', accent: '#A855F7', bg: T.bg };
-  const cafeTheme   = { ...T, primary: '#92400E', accent: '#D97706', bg: T.bg };
-  const activeTheme = categoryTab === 'pasabuy' ? pasabuyTheme : categoryTab === 'gaming' ? gamingTheme : categoryTab === 'cafe' ? cafeTheme : T;
+  const pasabuyTheme = { ...T, primary: THEMES.pasabuy.primary, accent: THEMES.pasabuy.accent, highlight: THEMES.pasabuy.highlight, border: THEMES.pasabuy.border };
+  const gamingTheme  = { ...T, primary: '#7C3AED', accent: '#A855F7', bg: T.bg };
+  const cafeTheme    = { ...T, primary: '#92400E', accent: '#D97706', bg: T.bg };
+  const activeTheme  = categoryTab === 'pasabuy' ? pasabuyTheme : categoryTab === 'gaming' ? gamingTheme : categoryTab === 'cafe' ? cafeTheme : T;
 
   const ownedRoomIds = rooms.filter(r => r.user_id === userId).map(r => r.id);
   const { requests, approveRequest, rejectRequest } = useRoomJoinRequests(ownedRoomIds);
@@ -278,13 +313,7 @@ export default function RoomsTab({ theme: T, userId }: RoomsTabProps) {
 
       {error && <div style={{ padding: '10px 14px', background: '#FEE2E2', borderRadius: 10, border: '1px solid #FCA5A5', marginBottom: 16 }}><p style={{ fontSize: 13, color: '#B91C1C', margin: 0 }}>Failed to load: {error}</p></div>}
 
-      {loading && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0', gap: 10, color: TT.textMuted }}>
-          <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} />
-          <span style={{ fontSize: 14 }}>Loading…</span>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-        </div>
-      )}
+      {loading && <RoomsSkeletonList theme={TT} />}
 
       {!loading && displayRooms.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>

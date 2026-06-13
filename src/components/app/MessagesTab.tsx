@@ -162,6 +162,26 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
   );
 }
 
+// ── Conversations skeleton ───────────────────────────────────────────────────
+
+function ConversationsSkeleton({ theme: T }: { theme: Theme }) {
+  return (
+    <div style={{ padding: '0 8px' }}>
+      <style>{`@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}} .sk-msg{border-radius:8px;background:linear-gradient(90deg,${T.surfaceAlt} 25%,${T.border} 50%,${T.surfaceAlt} 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear}`}</style>
+      {[0, 1, 2, 3, 4].map(i => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 12px', marginBottom: 2 }}>
+          <div className="sk-msg" style={{ width: 48, height: 48, borderRadius: '50%', flexShrink: 0 }} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div className="sk-msg" style={{ width: `${55 + i * 8}%`, height: 14 }} />
+            <div className="sk-msg" style={{ width: `${40 + i * 5}%`, height: 12, borderRadius: 6 }} />
+          </div>
+          <div className="sk-msg" style={{ width: 28, height: 11, borderRadius: 4, flexShrink: 0 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main tab ─────────────────────────────────────────────────────────────────
 
 interface ActiveChat { id: string; name: string; avatar: string; }
@@ -205,10 +225,7 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
       {/* Conversation list */}
       <div style={{ flex: 1, padding: '0 8px' }}>
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: 8, color: T.textMuted }}>
-            <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-            <span style={{ fontSize: 13 }}>Loading…</span>
-          </div>
+          <ConversationsSkeleton theme={T} />
         ) : conversations.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 24px', border: `2px dashed ${T.border}`, borderRadius: 16, margin: '8px', color: T.textMuted }}>
             <MessageSquare size={36} style={{ display: 'block', margin: '0 auto 12px', opacity: 0.35 }} />

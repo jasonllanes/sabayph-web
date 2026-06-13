@@ -5,7 +5,7 @@ import { submitJoinRequest, getMyRequestStatus } from '@/hooks/useJoinRequests';
 import { MapContainer, TileLayer, Marker, Circle, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { CATEGORIES, CATEGORY_DETAILS } from '@/data/themes';
+import { CATEGORIES, CATEGORY_DETAILS, THEMES } from '@/data/themes';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import { useExploreRooms } from '@/hooks/useExploreRooms';
 import type { CategoryId, Theme } from '@/types';
@@ -18,6 +18,17 @@ L.Icon.Default.mergeOptions({
 });
 
 const RADIUS_OPTIONS = [5, 10, 25, 50] as const;
+
+const CATEGORY_COLORS: Record<string, { primary: string; light: string; text: string }> = {
+  pasabuy:   { primary: '#CA8A04', light: '#FEF9C3', text: '#78350F' },
+  rotary:    { primary: '#1A7A3C', light: '#D1FAE5', text: '#064E3B' },
+  gaming:    { primary: '#A855F7', light: '#EDE9FE', text: '#4C1D95' },
+  cafe:      { primary: '#5C3317', light: '#FDE8C8', text: '#5C3317' },
+  travel:    { primary: '#1C6E94', light: '#DBEAFE', text: '#1E3A5F' },
+  hiking:    { primary: '#7F3B19', light: '#FEF3C7', text: '#7F3B19' },
+  rideshare: { primary: '#043E81', light: '#DBEAFE', text: '#043E81' },
+  volunteer: { primary: '#2E5748', light: '#D1FAE5', text: '#2E5748' },
+};
 const PH_CENTER: [number, number] = [12.8797, 121.774];
 const LIVE_CATEGORIES = CATEGORIES.filter(c => c.status === 'live');
 
@@ -135,6 +146,8 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
 
   const selectedCat = category ? CATEGORIES.find(c => c.id === category) : null;
   const selectedDetail = category ? CATEGORY_DETAILS[category as keyof typeof CATEGORY_DETAILS] : null;
+  // Always use the category's own brand theme for the hero + active chip — never the global T
+  const selectedCatTheme = category ? (THEMES[category as keyof typeof THEMES] ?? T) : T;
   const roomIcon = makeRoomIcon(T.primary);
   const centerIcon = makeCenterIcon();
 
@@ -149,17 +162,17 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
 
       {/* ── Hero ── */}
       {selectedCat && selectedDetail ? (
-        <div style={{ position: 'relative', overflow: 'hidden', background: T.primary, display: 'flex', minHeight: 300 }}>
+        <div style={{ position: 'relative', overflow: 'hidden', background: selectedCatTheme.primary, display: 'flex', minHeight: 300 }}>
           <div style={{ flex: '1 1 55%', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '48px 20px 24px 20px', zIndex: 2 }}>
             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.28) 75%, rgba(0,0,0,0) 100%)', zIndex: 0 }} />
             <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 3 }}>
-              <PixelHeart color="#EEA64C" size={16} />
+              <PixelHeart color={selectedCatTheme.highlight} size={16} />
             </div>
             <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <selectedCat.Icon size={18} style={{ color: '#fff', opacity: 0.9 }} strokeWidth={1.8} />
                 <p className="font-pixel" style={{ fontSize: 18, color: '#F1EDE1', margin: 0, letterSpacing: 2, textShadow: '0 2px 6px rgba(0,0,0,0.6)' }}>{selectedCat.name.toUpperCase()}</p>
-                <span style={{ fontSize: 9, fontWeight: 700, background: T.accent, color: '#F1EDE1', padding: '2px 7px', borderRadius: 8, letterSpacing: 0.5 }}>LIVE</span>
+                <span style={{ fontSize: 9, fontWeight: 700, background: selectedCatTheme.accent, color: '#F1EDE1', padding: '2px 7px', borderRadius: 8, letterSpacing: 0.5 }}>LIVE</span>
               </div>
               <p style={{ fontSize: 12, color: 'rgba(241,237,225,0.85)', margin: 0, lineHeight: 1.6, maxWidth: 260 }}>{selectedDetail.description}</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -207,11 +220,12 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
         </button>
         {LIVE_CATEGORIES.map(cat => {
           const active = category === cat.id;
+          const chipColor = CATEGORY_COLORS[cat.id] ?? { primary: T.primary, light: T.surfaceAlt, text: T.text };
           return (
             <button
               key={cat.id}
               onClick={() => { setCategory(active ? null : cat.id); setSelectedLoc(null); }}
-              style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: `1.5px solid ${active ? T.primary : T.border}`, background: active ? T.primary : T.surface, color: active ? T.bg : T.text, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 150ms ease' }}
+              style={{ flexShrink: 0, padding: '7px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: `1.5px solid ${active ? chipColor.primary : T.border}`, background: active ? chipColor.primary : T.surface, color: active ? '#fff' : T.text, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 150ms ease' }}
             >
               <cat.Icon size={13} strokeWidth={active ? 2.2 : 1.8} />
               {cat.name}
@@ -342,17 +356,19 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
                 <p style={{ fontSize: 14, margin: 0 }}>No rooms here yet.</p>
               </div>
             ) : (
-              displayRooms.map(room => (
+              displayRooms.map(room => {
+                const cat = CATEGORY_COLORS[room.category] ?? { primary: T.primary, light: T.surfaceAlt, text: T.primary };
+                return (
                 <div key={room.id}
-                  style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 16, overflow: 'hidden', transition: 'box-shadow 150ms ease' }}
-                  onMouseEnter={e => { checkRequestStatus(room.id); (e.currentTarget.style.boxShadow = `4px 4px 0 ${T.text}`); }}
+                  style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderLeft: `4px solid ${cat.primary}`, borderRadius: 16, overflow: 'hidden', transition: 'box-shadow 150ms ease' }}
+                  onMouseEnter={e => { checkRequestStatus(room.id); (e.currentTarget.style.boxShadow = `4px 4px 0 ${cat.primary}40`); }}
                   onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}
                 >
                   <div style={{ padding: '14px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 10, fontWeight: 700, background: T.surfaceAlt, color: T.primary, padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{room.category}</span>
+                          <span style={{ fontSize: 10, fontWeight: 700, background: cat.light, color: cat.text, padding: '2px 8px', borderRadius: 10, textTransform: 'uppercase' }}>{room.category}</span>
                           {room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: T.accent, color: '#fff', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
                           {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, background: T.border, color: T.textMuted, padding: '2px 8px', borderRadius: 8 }}><Lock size={9} />PRIVATE</span>}
                         </div>
@@ -414,7 +430,8 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
                     );
                   })()}
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

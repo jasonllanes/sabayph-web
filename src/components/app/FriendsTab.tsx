@@ -32,6 +32,29 @@ function miniVerified(p: DiscoverProfile) {
   return           { Icon: ShieldAlert,   color: '#9CA3AF', bg: '#F3F4F6', label: 'New member' };
 }
 
+// ── Friends skeleton ──────────────────────────────────────────────────────
+
+function FriendsSkeletonList({ theme: T }: { theme: Theme }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <style>{`@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}} .sk-fr{border-radius:8px;background:linear-gradient(90deg,${T.surfaceAlt} 25%,${T.border} 50%,${T.surfaceAlt} 75%);background-size:800px 100%;animation:shimmer 1.4s infinite linear}`}</style>
+      {[0, 1, 2, 3].map(i => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 16 }}>
+          <div className="sk-fr" style={{ width: 46, height: 46, borderRadius: '50%', flexShrink: 0 }} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div className="sk-fr" style={{ width: `${50 + i * 10}%`, height: 14 }} />
+            <div className="sk-fr" style={{ width: `${35 + i * 6}%`, height: 11, borderRadius: 5 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <div className="sk-fr" style={{ width: 52, height: 30, borderRadius: 16 }} />
+            <div className="sk-fr" style={{ width: 32, height: 30, borderRadius: '50%' }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Compact person row ─────────────────────────────────────────────────────
 
 function PersonRow({
@@ -253,11 +276,7 @@ export default function FriendsTab({ theme: T, userId }: FriendsTabProps) {
       {/* ── Friends list ── */}
       {activeSection === 'friends' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {isLoading && (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0', color: T.textMuted }}>
-              <Loader size={20} style={{ animation: 'spin 1s linear infinite' }} />
-            </div>
-          )}
+          {isLoading && <FriendsSkeletonList theme={T} />}
 
           {!isLoading && acceptedConns.length === 0 && (
             <div style={{ textAlign: 'center', padding: '36px 20px', border: `2px dashed ${T.border}`, borderRadius: 18 }}>

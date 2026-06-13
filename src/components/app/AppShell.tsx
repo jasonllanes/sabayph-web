@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { Moon, Sun } from 'lucide-react';
+import {
+  Moon, Sun, ShoppingBasket, HeartHandshake, Gamepad2, Coffee,
+} from 'lucide-react';
 import { useScreenSize } from '@/hooks/useScreenSize';
-import { useDarkMode } from '@/hooks/useDarkMode';
 import { useProfile } from '@/hooks/useProfile';
 import { THEMES } from '@/data/themes';
 import type { Theme, ThemeKey } from '@/types';
@@ -17,19 +18,44 @@ import MessagesTab from './MessagesTab';
 import { useUnreadCount } from '@/hooks/useMessages';
 import { usePendingFriendsCount, usePendingRoomsCount } from '@/hooks/useBadgeCounts';
 
-// Splash screen dark palette applied on top of any theme
+// ─── Theme modes ──────────────────────────────────────────────────────────────
+
+export type ThemeMode = 'light' | 'dark' | 'pasabuy' | 'rotary' | 'gaming' | 'cafe';
+
+const THEME_MODES: { id: ThemeMode; label: string; Icon: React.ElementType; dot: string }[] = [
+  { id: 'light',   label: 'Light',   Icon: Sun,           dot: '#F1EDE1' },
+  { id: 'dark',    label: 'Dark',    Icon: Moon,          dot: '#0D1F2D' },
+  { id: 'pasabuy', label: 'PasaBuy', Icon: ShoppingBasket, dot: '#CA8A04' },
+  { id: 'rotary',  label: 'Rotary',  Icon: HeartHandshake, dot: '#1A7A3C' },
+  { id: 'gaming',  label: 'Gaming',  Icon: Gamepad2,       dot: '#A855F7' },
+  { id: 'cafe',    label: 'Café',    Icon: Coffee,         dot: '#5C3317' },
+];
+
+// Dark-mode overlay — retains bg/surface palette, replaces primary with #f0a54b
 const DARK: Partial<Theme> = {
   bg:         '#06131B',
   surface:    '#0D1F2D',
   surfaceAlt: '#142332',
+  primary:    '#f0a54b',
+  accent:     '#f0a54b',
+  highlight:  '#f0a54b',
   text:       '#F1EDE1',
   textMuted:  '#9DB0C2',
   border:     '#2A405A',
   badge:      '#142332',
 };
 
-function applyDark(base: Theme): Theme {
-  return { ...base, ...DARK };
+function resolveTheme(mode: ThemeMode, activeCategory: ThemeKey): Theme {
+  switch (mode) {
+    case 'dark':    return { ...THEMES.heritage, ...DARK };
+    case 'pasabuy': return THEMES.pasabuy;
+    case 'rotary':  return THEMES.rotary;
+    case 'gaming':  return THEMES.gaming;
+    case 'cafe':    return THEMES.cafe;
+    default:
+      // Light mode: active category drives the theme globally
+      return THEMES[activeCategory];
+  }
 }
 
 const GLOBAL_STYLE = `
@@ -43,6 +69,8 @@ const GLOBAL_STYLE = `
   @keyframes tab-enter { from { opacity: 0; } to { opacity: 1; } }
   .tab-enter   { animation: tab-enter 220ms ease-out both; }
   * { box-sizing: border-box; }
+  ::selection { background: #f0a54b; color: #06131B; }
+  ::-moz-selection { background: #f0a54b; color: #06131B; }
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
@@ -62,6 +90,97 @@ interface AppShellProps {
   onLogout: () => void;
 }
 
+// ─── Theme Mode Selector ──────────────────────────────────────────────────────
+
+function ThemeModeSelector({
+  mode, onSetMode, theme: T,
+}: { mode: ThemeMode; onSetMode: (m: ThemeMode) => void; theme: Theme }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const current = THEME_MODES.find(m => m.id === mode)!;
+  const isDarkBg = mode === 'dark' || mode === 'gaming';
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        title="Change theme mode"
+        style={{
+          width: 34, height: 34, borderRadius: '50%',
+          background: isDarkBg ? T.surfaceAlt : T.surfaceAlt,
+          border: `1.5px solid ${T.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer',
+          color: T.primary,
+          transition: 'all 250ms ease',
+          position: 'relative',
+        }}
+      >
+        <current.Icon size={16} />
+        {/* Colored dot showing active mode */}
+        <span style={{
+          position: 'absolute', top: -2, right: -2,
+          width: 9, height: 9, borderRadius: '50%',
+          background: current.dot,
+          border: `1.5px solid ${T.surface}`,
+        }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 42, right: 0, zIndex: 9000,
+          background: T.surface, border: `1.5px solid ${T.border}`,
+          borderRadius: 14, boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+          overflow: 'hidden', minWidth: 148,
+        }}>
+          <p style={{ fontSize: 10, fontWeight: 700, color: T.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', padding: '10px 12px 6px', margin: 0, fontFamily: '"VT323",monospace' }}>
+            APPEARANCE
+          </p>
+          {THEME_MODES.map(({ id, label, Icon, dot }) => {
+            const active = id === mode;
+            return (
+              <button
+                key={id}
+                onClick={() => { onSetMode(id); setOpen(false); }}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', gap: 9,
+                  padding: '9px 12px', background: active ? `${T.primary}18` : 'none',
+                  border: 'none', cursor: 'pointer', textAlign: 'left',
+                  fontFamily: '"DM Sans",system-ui,sans-serif',
+                  transition: 'background 120ms',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.background = `${T.primary}0E`; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'none'; }}
+              >
+                <span style={{ width: 12, height: 12, borderRadius: '50%', background: dot, flexShrink: 0, border: `1.5px solid ${T.border}` }} />
+                <Icon size={13} style={{ color: active ? T.primary : T.textMuted, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? T.primary : T.text }}>
+                  {label}
+                </span>
+                {active && (
+                  <span style={{ marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%', background: T.primary, flexShrink: 0 }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── App Shell ────────────────────────────────────────────────────────────────
+
 export default function AppShell({ user, onLogout }: AppShellProps) {
   const [activeTab, setActiveTab] = useState<TabId>(() => {
     const saved = localStorage.getItem('sabayph_active_tab') as TabId | null;
@@ -73,26 +192,36 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
     setActiveTab(tab);
     localStorage.setItem('sabayph_active_tab', tab);
   };
+
   const [activeCategory, setActiveCategory] = useState<ThemeKey>('heritage');
   const [exploreCategory, setExploreCategory] = useState<import('@/types').CategoryId | null>(null);
-  const { isMobile } = useScreenSize();
-  const { dark, toggle: toggleDark } = useDarkMode();
 
-  const effectiveCategory: ThemeKey = activeTab === 'discover' ? activeCategory : 'heritage';
-  const baseTheme: Theme = THEMES[effectiveCategory];
-  const theme: Theme = dark ? applyDark(baseTheme) : baseTheme;
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    return (localStorage.getItem('sabayph_theme_mode') as ThemeMode) ?? 'light';
+  });
+
+  const handleSetMode = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    localStorage.setItem('sabayph_theme_mode', mode);
+  };
+
+  // ProfileTab backward compat: treat dark + gaming as "dark"
+  const isDark = themeMode === 'dark' || themeMode === 'gaming';
+  const toggleDark = () => handleSetMode(isDark ? 'light' : 'dark');
+
+  const { isMobile } = useScreenSize();
+  const theme = resolveTheme(themeMode, activeCategory);
 
   const { profile } = useProfile(user?.id);
   const unreadMessages = useUnreadCount(user?.id);
-  const pendingFriends = usePendingFriendsCount(user?.id);
-  const pendingRooms   = usePendingRoomsCount(user?.id);
-  const userEmail = user?.email ?? user?.user_metadata?.email ?? 'kasama@sabayph.com';
+  const pendingFriends  = usePendingFriendsCount(user?.id);
+  const pendingRooms    = usePendingRoomsCount(user?.id);
+  const userEmail  = user?.email ?? user?.user_metadata?.email ?? 'kasama@sabayph.com';
   const googleName: string = user?.user_metadata?.full_name ?? user?.user_metadata?.name ?? '';
-  const userName = profile?.display_name || googleName || userEmail.split('@')[0];
-  const avatarUrl: string = user?.user_metadata?.avatar_url ?? '';
+  const userName   = profile?.display_name || googleName || userEmail.split('@')[0];
+  const avatarUrl: string  = user?.user_metadata?.avatar_url ?? '';
 
-  // Resolve display avatar: Google pic → gender-based local avatar
-  const isFemale = profile?.gender === 'Babae' || (profile?.profile_tags ?? []).some(t => t === 'She/Her' || t === 'She/They');
+  const isFemale    = profile?.gender === 'Babae' || (profile?.profile_tags ?? []).some(t => t === 'She/Her' || t === 'She/They');
   const localAvatar = isFemale ? '/avatar_girl.png' : '/avatar.png';
   const displayAvatar = avatarUrl || localAvatar;
 
@@ -105,42 +234,36 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
     setActiveCategory(typeof val === 'function' ? val(activeCategory) : val);
   }, [activeCategory]);
 
-  const DarkToggle = () => (
-    <button
-      onClick={toggleDark}
-      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      style={{
-        width: 34, height: 34, borderRadius: '50%',
-        background: dark ? '#2A405A' : theme.surfaceAlt,
-        border: `1.5px solid ${theme.border}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        cursor: 'pointer', color: dark ? '#EEA64C' : theme.textMuted,
-        transition: 'all 250ms ease', flexShrink: 0,
-      }}
-    >
-      {dark ? <Sun size={16} /> : <Moon size={16} />}
-    </button>
-  );
-
   const renderTab = () => {
     switch (activeTab) {
-      case 'rooms':   return <RoomsTab theme={theme} userId={user?.id} />;
-      case 'explore': return <ExploreTab theme={theme} userId={user?.id} initialCategory={exploreCategory} />;
+      case 'rooms':    return <RoomsTab theme={theme} userId={user?.id} />;
+      case 'explore':  return <ExploreTab theme={theme} userId={user?.id} initialCategory={exploreCategory} />;
       case 'friends':  return <FriendsTab theme={theme} userId={user?.id} />;
       case 'messages': return <MessagesTab theme={theme} userId={user?.id} />;
-      case 'profile': return (
+      case 'profile':  return (
         <ProfileTab
           theme={theme}
           user={{ email: userEmail, name: userName }}
           supabaseUser={user ?? undefined}
           avatarUrl={avatarUrl}
           userId={user?.id}
-          dark={dark}
+          dark={isDark}
           onToggleDark={toggleDark}
           onLogout={onLogout}
         />
       );
-      default: return <DiscoverTab theme={theme} activeCategory={activeCategory} onCategoryChange={onCategoryChange} userId={user?.id} onBrowseCategory={cat => { setExploreCategory(cat); handleTabChange('explore'); }} />;
+      default: return (
+        <DiscoverTab
+          theme={theme}
+          activeCategory={activeCategory}
+          onCategoryChange={onCategoryChange}
+          userId={user?.id}
+          userName={userName}
+          userAvatar={displayAvatar}
+          onBrowseCategory={cat => { setExploreCategory(cat); handleTabChange('explore'); }}
+          onAddRoom={() => handleTabChange('rooms')}
+        />
+      );
     }
   };
 
@@ -153,11 +276,11 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <img src="/sabayph_logo.png" alt="SabayPH" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', border: `2px solid ${theme.primary}` }} />
             <span className="font-display" style={{ fontSize: 18, fontWeight: 800, color: theme.text }}>
-              Sabay<span style={{ color: theme.accent }}>PH</span>
+              Sabay<span style={{ color: theme.primary }}>PH</span>
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <DarkToggle />
+            <ThemeModeSelector mode={themeMode} onSetMode={handleSetMode} theme={theme} />
             <div
               style={{ width: 34, height: 34, borderRadius: '50%', background: theme.primary, color: theme.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Bricolage Grotesque", serif', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: `2px solid ${theme.border}`, overflow: 'hidden', position: 'relative', flexShrink: 0 }}
               onClick={() => handleTabChange('profile')}
@@ -174,7 +297,9 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
           </div>
         </div>
 
-        <BottomNav activeTab={activeTab} onTabChange={handleTabChange} theme={theme} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} profileCompleted={!!profile?.profile_completed} />
+        <div data-bottomnav>
+          <BottomNav activeTab={activeTab} onTabChange={handleTabChange} theme={theme} unreadMessages={unreadMessages} pendingFriends={pendingFriends} pendingRooms={pendingRooms} profileCompleted={!!profile?.profile_completed} />
+        </div>
       </div>
     );
   }
@@ -188,19 +313,19 @@ export default function AppShell({ user, onLogout }: AppShellProps) {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 32px', background: theme.surface, borderBottom: `1.5px solid ${theme.border}`, transition: 'all 600ms ease' }}>
           <div>
-            <p className="font-pixel" style={{ fontSize: 12, color: theme.accent, margin: '0 0 2px', letterSpacing: 1 }}>
+            <p className="font-pixel" style={{ fontSize: 12, color: theme.primary, margin: '0 0 2px', letterSpacing: 1 }}>
               {TAB_LABELS[activeTab].toUpperCase()}
             </p>
             <h1 className="font-display" style={{ fontSize: 24, fontWeight: 800, color: theme.text, margin: 0 }}>
               {activeTab === 'discover' ? `Kamusta, ${userName}! 👋`
-                : activeTab === 'rooms' ? 'Your Rooms'
+                : activeTab === 'rooms'    ? 'Your Rooms'
                 : activeTab === 'explore'  ? 'Explore Activities'
                 : activeTab === 'messages' ? 'Messages'
                 : 'Your Profile'}
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <DarkToggle />
+            <ThemeModeSelector mode={themeMode} onSetMode={handleSetMode} theme={theme} />
             <div style={{ textAlign: 'right' }}>
               <p style={{ fontSize: 14, fontWeight: 700, color: theme.text, margin: 0 }}>{userName}</p>
               <p style={{ fontSize: 12, color: theme.textMuted, margin: 0 }}>{userEmail}</p>

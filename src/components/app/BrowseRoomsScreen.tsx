@@ -1,11 +1,22 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Search, Navigation, Loader, Users, Lock, MapPin, Calendar, ChevronDown, ChevronUp, Send, Check, X } from 'lucide-react';
-import { CATEGORIES, CATEGORY_DETAILS } from '@/data/themes';
+import { CATEGORIES, CATEGORY_DETAILS, THEMES } from '@/data/themes';
 import { useExploreRooms } from '@/hooks/useExploreRooms';
 import { submitJoinRequest, getMyRequestStatus } from '@/hooks/useJoinRequests';
 import { useProfile } from '@/hooks/useProfile';
 import { PixelHeart } from '@/components/common/PixelDecorations';
 import type { CategoryId, Theme } from '@/types';
+
+const CATEGORY_COLORS: Record<string, { primary: string; light: string; text: string }> = {
+  pasabuy:   { primary: '#CA8A04', light: '#FEF9C3', text: '#78350F' },
+  rotary:    { primary: '#1A7A3C', light: '#D1FAE5', text: '#064E3B' },
+  gaming:    { primary: '#A855F7', light: '#EDE9FE', text: '#4C1D95' },
+  cafe:      { primary: '#5C3317', light: '#FDE8C8', text: '#5C3317' },
+  travel:    { primary: '#1C6E94', light: '#DBEAFE', text: '#1E3A5F' },
+  hiking:    { primary: '#7F3B19', light: '#FEF3C7', text: '#7F3B19' },
+  rideshare: { primary: '#043E81', light: '#DBEAFE', text: '#043E81' },
+  volunteer: { primary: '#2E5748', light: '#D1FAE5', text: '#2E5748' },
+};
 
 const RADIUS_OPTIONS = [5, 10, 25, 50] as const;
 
@@ -24,6 +35,8 @@ export default function BrowseRoomsScreen({ categoryId, theme: T, userId, onBack
   const category  = CATEGORIES.find(c => c.id === categoryId)!;
   const detail    = CATEGORY_DETAILS[categoryId];
   const heroImage = category.image ?? '/cover.png';
+  // Always use the category's own brand theme for hero + accents, regardless of global mode
+  const CT = THEMES[categoryId as keyof typeof THEMES] ?? T;
 
   const { profile } = useProfile(userId);
   const [search, setSearch]       = useState('');
@@ -81,7 +94,7 @@ export default function BrowseRoomsScreen({ categoryId, theme: T, userId, onBack
     <div style={{ minHeight: '100vh', background: T.bg, fontFamily: '"DM Sans", system-ui, sans-serif' }}>
 
       {/* ── Hero ── */}
-      <div style={{ position: 'relative', overflow: 'hidden', background: T.primary, display: 'flex', minHeight: 340 }}>
+      <div style={{ position: 'relative', overflow: 'hidden', background: CT.primary, display: 'flex', minHeight: 340 }}>
 
         {/* Left: details */}
         <div style={{ flex: '1 1 55%', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '52px 20px 24px 20px', zIndex: 2 }}>
@@ -96,7 +109,7 @@ export default function BrowseRoomsScreen({ categoryId, theme: T, userId, onBack
           </button>
 
           <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 3 }}>
-            <PixelHeart color="#EEA64C" size={16} />
+            <PixelHeart color={CT.highlight} size={16} />
           </div>
 
           <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8 }}>
@@ -104,7 +117,7 @@ export default function BrowseRoomsScreen({ categoryId, theme: T, userId, onBack
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <category.Icon size={18} style={{ color: '#fff', opacity: 0.9 }} strokeWidth={1.8} />
               <p className="font-pixel" style={{ fontSize: 18, color: '#F1EDE1', margin: 0, letterSpacing: 2, textShadow: '0 2px 6px rgba(0,0,0,0.6)' }}>{category.name.toUpperCase()}</p>
-              <span style={{ fontSize: 9, fontWeight: 700, background: T.accent, color: '#F1EDE1', padding: '2px 7px', borderRadius: 8, letterSpacing: 0.5 }}>LIVE</span>
+              <span style={{ fontSize: 9, fontWeight: 700, background: CT.accent, color: '#F1EDE1', padding: '2px 7px', borderRadius: 8, letterSpacing: 0.5 }}>LIVE</span>
             </div>
 
             <p style={{ fontSize: 12, color: 'rgba(241,237,225,0.85)', margin: 0, lineHeight: 1.6, maxWidth: 260 }}>{detail.description}</p>
@@ -278,14 +291,16 @@ function RoomCard({ room, T, userId, requestState, requestingId, requestMsg, onS
   const isFull = room.member_count >= room.max_members;
   const isOwner = room.user_id === userId;
   const isRequestingThis = requestingId === room.id;
+  const cat = CATEGORY_COLORS[room.category] ?? { primary: T.primary, light: T.surfaceAlt, text: T.primary };
 
   const memberLabel = categoryId === 'gaming' ? 'players' : categoryId === 'cafe' ? 'guests' : categoryId === 'pasabuy' ? 'agents' : 'members';
 
   return (
-    <div style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 16, overflow: 'hidden' }}>
+    <div style={{ background: T.surface, border: `1.5px solid ${T.border}`, borderLeft: `4px solid ${cat.primary}`, borderRadius: 16, overflow: 'hidden' }}>
       <div style={{ padding: 14 }}>
         {/* Badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 9, fontWeight: 700, background: cat.light, color: cat.text, padding: '2px 7px', borderRadius: 6, textTransform: 'uppercase' }}>{room.category}</span>
           {room.status === 'live' && !isOwner && <span style={{ fontSize: 9, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 7px', borderRadius: 6 }}>LIVE</span>}
           {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 700, background: T.surfaceAlt, color: T.textMuted, padding: '2px 7px', borderRadius: 6, border: `1px solid ${T.border}` }}><Lock size={8} /> PRIVATE</span>}
           {isFull && <span style={{ fontSize: 9, fontWeight: 700, background: T.surfaceAlt, color: T.textMuted, padding: '2px 7px', borderRadius: 6 }}>FULL</span>}
@@ -303,7 +318,7 @@ function RoomCard({ room, T, userId, requestState, requestingId, requestMsg, onS
             {room.member_count} / {room.max_members} {memberLabel}
           </span>
           <div style={{ height: 4, background: T.surfaceAlt, borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
-            <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: isFull ? '#EF4444' : T.primary, transition: 'width 500ms' }} />
+            <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: isFull ? '#EF4444' : cat.primary, transition: 'width 500ms' }} />
           </div>
         </div>
 
