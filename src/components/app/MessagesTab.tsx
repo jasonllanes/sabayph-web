@@ -236,7 +236,7 @@ function MessageActions({ mine, side, isOpen, showEmoji, onToggle, onClose, onSh
 
 // ── New conversation picker ──────────────────────────────────────────────────
 
-interface Friend { id: string; display_name: string; gender: string | null; profile_tags: string[] | null; }
+interface Friend { id: string; display_name: string; gender: string | null; profile_tags: string[] | null; avatar_url: string | null; }
 
 function NewConvPicker({ userId, theme: T, onPick, onClose }: { userId: string; theme: Theme; onPick: (f: Friend) => void; onClose: () => void }) {
   const { connections } = useConnections(userId);
@@ -247,7 +247,7 @@ function NewConvPicker({ userId, theme: T, onPick, onClose }: { userId: string; 
     const accepted = connections.filter(c => c.status === 'accepted');
     if (!accepted.length) { setFriends([]); return; }
     const ids = accepted.map(c => c.from_user_id === userId ? c.to_user_id : c.from_user_id);
-    supabase.from('profiles').select('id, display_name, gender, profile_tags').in('id', ids)
+    supabase.from('profiles').select('id, display_name, gender, profile_tags, avatar_url').in('id', ids)
       .then(({ data }) => setFriends((data as Friend[]) ?? []));
   }, [connections, userId]);
 
@@ -281,7 +281,7 @@ function NewConvPicker({ userId, theme: T, onPick, onClose }: { userId: string; 
               onMouseEnter={e => (e.currentTarget.style.background = `${T.text}08`)}
               onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              <img src={getDefaultAvatar(f.gender, f.profile_tags)} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${T.border}` }} />
+              <img src={f.avatar_url ?? getDefaultAvatar(f.gender, f.profile_tags)} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${T.border}` }} />
               <span style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{f.display_name}</span>
             </button>
           ))}
@@ -1013,7 +1013,7 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
           theme={T}
           onPick={f => {
             setShowPicker(false);
-            setActiveChat({ kind: 'dm', id: f.id, name: f.display_name, avatar: getDefaultAvatar(f.gender, f.profile_tags) });
+            setActiveChat({ kind: 'dm', id: f.id, name: f.display_name, avatar: f.avatar_url ?? getDefaultAvatar(f.gender, f.profile_tags) });
           }}
           onClose={() => setShowPicker(false)}
         />

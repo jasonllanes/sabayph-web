@@ -54,7 +54,7 @@ export function useConversations(userId?: string) {
     const partnerIds = [...map.keys()];
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, display_name, gender, profile_tags')
+      .select('id, display_name, gender, profile_tags, avatar_url')
       .in('id', partnerIds);
 
     const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
@@ -63,10 +63,11 @@ export function useConversations(userId?: string) {
       const { latest, unread } = map.get(pid)!;
       const p: any = profileMap.get(pid) ?? {};
       const isFemale = p.gender === 'Babae' || (p.profile_tags ?? []).some((t: string) => t === 'She/Her' || t === 'She/They');
+      const defaultAvatar = isFemale ? '/avatar_girl.png' : '/avatar.png';
       return {
         partner_id: pid,
         partner_name: p.display_name ?? 'Kasama',
-        partner_avatar: isFemale ? '/avatar_girl.png' : '/avatar.png',
+        partner_avatar: p.avatar_url ?? defaultAvatar,
         partner_gender: p.gender ?? null,
         last_message: latest.content,
         last_message_at: latest.created_at,
@@ -126,7 +127,20 @@ export function useChat(userId?: string, partnerId?: string) {
         const m = payload.new as Message;
         if ((m.sender_id === userId && m.recipient_id === partnerId) ||
             (m.sender_id === partnerId && m.recipient_id === userId)) {
-          setMessages(prev => [...prev, m]);
+          setMessages(prev => {
+            // Replace matching optimistic entry; otherwise dedup then append
+            const idx = prev.findIndex(msg =>
+              msg.id.startsWith('opt-') &&
+              msg.sender_id === m.sender_id &&
+              msg.content === m.content
+            );
+            if (idx !== -1) {
+              const next = [...prev];
+              next[idx] = m;
+              return next;
+            }
+            return prev.some(msg => msg.id === m.id) ? prev : [...prev, m];
+          });
           if (m.recipient_id === userId) {
             supabase.from('messages').update({ read_at: new Date().toISOString() }).eq('id', m.id);
           }
@@ -149,11 +163,26 @@ export function useChat(userId?: string, partnerId?: string) {
   const sendMessage = useCallback(async (content: string) => {
     if (!userId || !partnerId || !content.trim()) return;
     setSending(true);
-    await supabase.from('messages').insert({
+    const optimistic: Message = {
+      id: `opt-${Date.now()}`,
       sender_id: userId,
       recipient_id: partnerId,
       content: content.trim(),
-    });
+      read_at: null,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+    };
+    setMessages(prev => [...prev, optimistic]);
+    const { data: inserted, error } = await supabase.from('messages').insert({
+      sender_id: userId,
+      recipient_id: partnerId,
+      content: content.trim(),
+    }).select().single();
+    if (inserted) {
+      setMessages(prev => prev.map(m => m.id === optimistic.id ? inserted as Message : m));
+    } else if (error) {
+      setMessages(prev => prev.filter(m => m.id !== optimistic.id));
+    }
     setSending(false);
   }, [userId, partnerId]);
 
