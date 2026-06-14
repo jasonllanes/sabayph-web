@@ -86,7 +86,7 @@ export function HeroSection({ theme, scrollTo }: HeroSectionProps) {
               }}
             />
             <img
-              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/logo.png"
+              src="/sabayph_logo_tp.png"
               alt="SabayPH mascot"
               className="absolute inset-0 h-full w-full object-contain p-8"
             />

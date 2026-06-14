@@ -144,7 +144,7 @@ export default function ShareProfileCard({
               position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <img
-                src={IMG('sabayph_logo.png')}
+                src="/sabayph_logo_tp.png"
                 alt="SabayPH"
                 style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'cover' }}
               />
@@ -248,7 +248,7 @@ export default function ShareProfileCard({
                 fgColor={T.text}
                 level="M"
                 imageSettings={{
-                  src: IMG('sabayph_logo.png'),
+                  src: '/sabayph_logo_tp.png',
                   x: undefined, y: undefined,
                   height: 20, width: 20,
                   excavate: true,

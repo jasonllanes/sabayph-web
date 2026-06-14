@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MapPin, Search, X, Navigation, Users, Lock, Home, Send, Check, Map, Calendar, Gamepad2, ShoppingBasket, Coffee, Heart, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { MapPin, Search, X, Navigation, Users, Lock, Home, Send, Check, Map, Calendar, Gamepad2, ShoppingBasket, Coffee, Heart, Clock, ChevronDown, ChevronUp, Dumbbell } from 'lucide-react';
 import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import type { Room } from '@/types';
 import { useProfile } from '@/hooks/useProfile';
@@ -27,6 +27,7 @@ const CATEGORY_COLORS: Record<string, { primary: string; light: string; text: st
   rotary:    { primary: '#1A7A3C', light: '#D1FAE5', text: '#064E3B' },
   gaming:    { primary: '#A855F7', light: '#EDE9FE', text: '#4C1D95' },
   cafe:      { primary: '#5C3317', light: '#FDE8C8', text: '#5C3317' },
+  sports:    { primary: '#bee800', light: '#F0FD80', text: '#4A6200' },
   travel:    { primary: '#1C6E94', light: '#DBEAFE', text: '#1E3A5F' },
   hiking:    { primary: '#7F3B19', light: '#FEF3C7', text: '#7F3B19' },
   rideshare: { primary: '#043E81', light: '#DBEAFE', text: '#043E81' },
@@ -46,6 +47,7 @@ const CAT_STYLE: Record<string, {
   gaming:  { headerBg: '#6D28D9', headerText: '#EDE9FE', badgeBg: '#2E1065', badgeText: '#C084FC', image: IMG('gaming.png'),  Icon: Gamepad2,       whatLabel: 'Game' },
   cafe:    { headerBg: '#5C3317', headerText: '#F5EDE2', badgeBg: '#EDD9C0', badgeText: '#5C3317', image: IMG('coffee.png'),  Icon: Coffee,         whatLabel: 'Venue' },
   pasabuy: { headerBg: '#CA8A04', headerText: '#FEFCE8', badgeBg: '#FEF9C3', badgeText: '#78350F', image: IMG('pasabuy.png'), Icon: ShoppingBasket, whatLabel: 'Items' },
+  sports:  { headerBg: '#bee800', headerText: '#1A2800', badgeBg: '#F0FD80', badgeText: '#4A6200', image: IMG('sports.png'),  Icon: Dumbbell,       whatLabel: 'Sport' },
 };
 
 function formatEventDate(iso: string): string {

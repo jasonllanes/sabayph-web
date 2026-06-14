@@ -74,7 +74,7 @@ export default function ShareRoomCard({ onClose, theme: T, room, category }: Sha
           img.crossOrigin = 'anonymous';
           img.onload = () => res(img);
           img.onerror = rej;
-          img.src = IMG('sabayph_logo.png');
+          img.src = '/sabayph_logo_tp.png';
         });
       } catch { /* skip if CORS fails */ }
 
@@ -286,7 +286,7 @@ export default function ShareRoomCard({ onClose, theme: T, room, category }: Sha
           <div style={{ position: 'absolute', bottom: 12, right: 32, width: 56, height: 56, borderRadius: '50%', background: '#ffffff08', pointerEvents: 'none' }} />
 
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
-            <img src={IMG('sabayph_logo.png')} alt="SabayPH" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover' }} />
+            <img src={'/sabayph_logo_tp.png'} alt="SabayPH" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover' }} />
             <span style={{ fontFamily: '"Bricolage Grotesque", serif', fontSize: 15, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
               Sabay<span style={{ color: '#EEA64C' }}>PH</span>
             </span>
@@ -340,7 +340,7 @@ export default function ShareRoomCard({ onClose, theme: T, room, category }: Sha
                 fgColor="#1a1a1a"
                 level="M"
                 imageSettings={{
-                  src: IMG('sabayph_logo.png'),
+                  src: '/sabayph_logo_tp.png',
                   x: undefined, y: undefined,
                   height: 22, width: 22,
                   excavate: true,

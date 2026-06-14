@@ -949,9 +949,9 @@ interface AdminRoom {
   user_id: string; created_at: string; host_name?: string | null;
 }
 
-const CAT_OPTS = ['all', 'rotary', 'gaming', 'cafe', 'pasabuy'] as const;
-const CAT_COLORS: Record<string, string> = { rotary: A.primary, gaming: '#7C3AED', cafe: '#D97706', pasabuy: '#B45309' };
-const CAT_EMOJI: Record<string, string>  = { rotary: '🏛️', gaming: '🎮', cafe: '☕', pasabuy: '🛒' };
+const CAT_OPTS = ['all', 'rotary', 'gaming', 'cafe', 'pasabuy', 'sports'] as const;
+const CAT_COLORS: Record<string, string> = { rotary: A.primary, gaming: '#7C3AED', cafe: '#D97706', pasabuy: '#B45309', sports: '#bee800' };
+const CAT_EMOJI: Record<string, string>  = { rotary: '🏛️', gaming: '🎮', cafe: '☕', pasabuy: '🛒', sports: '⚽' };
 
 type RoomState = 'active' | 'queuing' | 'finished' | 'archived';
 

@@ -19,7 +19,7 @@ export function LandingFooter({ theme }: LandingFooterProps) {
         <div className="grid gap-8 md:grid-cols-4">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2">
-              <img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/logo.png" alt="SabayPH logo" className="h-10 w-10 object-contain" />
+              <img src="/sabayph_logo_tp.png" alt="SabayPH logo" className="h-10 w-10 object-contain" />
               <span className="font-display text-xl font-bold" style={{ color: theme.text }}>
                 Sabay<span style={{ color: theme.accent }}>PH</span>
               </span>

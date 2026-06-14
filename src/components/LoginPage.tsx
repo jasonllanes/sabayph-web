@@ -132,7 +132,7 @@ export default function LoginPage({ onLogin, onBack, onGoToSignUp }: LoginPagePr
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
             <img
-              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png"
+              src="/sabayph_logo_tp.png"
               alt="SabayPH"
               style={{ width: 48, height: 48, borderRadius: 12, border: `2px solid ${T.primary}`, objectFit: 'cover' }}
             />

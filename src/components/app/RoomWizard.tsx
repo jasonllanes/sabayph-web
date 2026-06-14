@@ -55,6 +55,21 @@ function makeDefault(): WizardData {
   };
 }
 
+const SPORTS: string[] = [
+  'Pickleball',
+  'Basketball',
+  'Volleyball',
+  'Badminton',
+  'Tennis',
+  'Football / Soccer',
+  'Swimming',
+  'Running / Jogging',
+  'Cycling',
+  'Table Tennis',
+  'Boxing / Martial Arts',
+  'Other',
+];
+
 const GAMES: { name: string; idLabel: string; placeholder: string }[] = [
   { name: 'Mobile Legends: Bang Bang', idLabel: 'ML Player ID',        placeholder: 'e.g. 123456789 (1234)' },
   { name: 'Honor of Kings',            idLabel: 'HOK Player ID',        placeholder: 'e.g. 123456789' },
@@ -84,7 +99,7 @@ function StepBar({ current, steps, theme: T }: { current: number; steps: string[
               width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: i < current ? T.primary : i === current ? T.primary : T.surfaceAlt,
               border: `2px solid ${i <= current ? T.primary : T.border}`,
-              color: i <= current ? T.bg : T.textMuted,
+              color: i <= current ? (isDark(T.primary) ? '#fff' : T.text) : T.textMuted,
               fontSize: 12, fontWeight: 700, flexShrink: 0,
               transition: 'all 300ms ease',
             }}>
@@ -125,9 +140,11 @@ function Step1({ data, set, T, nameRef }: { data: WizardData; set: <K extends ke
   const reqStar = <span style={{ color: '#C82718', marginLeft: 2 }}>*</span>;
   const roomNameLabel = data.category === 'gaming' ? 'GAMING ROOM NAME'
     : data.category === 'cafe' ? 'CAFE ROOM NAME'
+    : data.category === 'sports' ? 'SPORTS ROOM NAME'
     : 'ROTARY ROOM NAME';
   const roomNamePlaceholder = data.category === 'gaming' ? 'e.g. Friday Night Valorant Squad'
     : data.category === 'cafe' ? 'e.g. Sunday Coffee at Bo\'s'
+    : data.category === 'sports' ? 'e.g. Weekend Pickleball at CDO Sports Complex'
     : 'e.g. Davao Rotary District 3860';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -140,18 +157,9 @@ function Step1({ data, set, T, nameRef }: { data: WizardData; set: <K extends ke
         <label style={lbl}>DESCRIPTION</label>
         <textarea style={{ ...inp, height: 80, padding: '10px 14px', resize: 'vertical' }} value={data.description} onChange={e => set('description', e.target.value)} placeholder="What is this room about?" />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div>
-          <label style={lbl}>MAX MEMBERS</label>
-          <input style={inp} type="number" min={2} max={500} value={data.max_members} onChange={e => set('max_members', parseInt(e.target.value) || 20)} />
-        </div>
-        <div>
-          <label style={lbl}>STATUS</label>
-          <select style={{ ...inp, cursor: 'pointer' }} value={data.status} onChange={e => set('status', e.target.value as 'live' | 'soon')}>
-            <option value="live">Live</option>
-            <option value="soon">Soon</option>
-          </select>
-        </div>
+      <div>
+        <label style={lbl}>MAX MEMBERS</label>
+        <input style={inp} type="number" min={2} max={500} value={data.max_members} onChange={e => set('max_members', parseInt(e.target.value) || 20)} />
       </div>
       <br />
     </div>
@@ -163,6 +171,7 @@ function Step1({ data, set, T, nameRef }: { data: WizardData; set: <K extends ke
 function Step2({ data, set, T }: { data: WizardData; set: <K extends keyof WizardData>(k: K, v: WizardData[K]) => void; T: Theme }) {
   const { inp, lbl } = makeStyles(T);
   const isGaming = data.category === 'gaming';
+  const isSports = data.category === 'sports';
 
   const mapTheme: MapPickerTheme = {
     primary: T.primary, bg: T.bg, surface: T.surface,
@@ -196,8 +205,10 @@ function Step2({ data, set, T }: { data: WizardData; set: <K extends keyof Wizar
                   value={selectedDate}
                   onChange={e => {
                     const date = e.target.value;
-                    const time = (date === todayStr && selectedTime && selectedTime <= nowTimeStr)
-                      ? nowTimeStr : (selectedTime || '00:00');
+                    // When today is selected, time must be >= now; if not set or in the past, use now
+                    const time = date === todayStr
+                      ? (!selectedTime || selectedTime <= nowTimeStr ? nowTimeStr : selectedTime)
+                      : (selectedTime || '08:00');
                     set('event_date', date ? `${date}T${time}` : '');
                   }}
                 />
@@ -212,7 +223,9 @@ function Step2({ data, set, T }: { data: WizardData; set: <K extends keyof Wizar
                   onChange={e => {
                     const time = e.target.value;
                     const date = selectedDate || todayStr;
-                    set('event_date', time ? `${date}T${time}` : '');
+                    // Clamp to current time if user manually enters a past time for today
+                    const finalTime = (date === todayStr && time < nowTimeStr) ? nowTimeStr : time;
+                    set('event_date', finalTime ? `${date}T${finalTime}` : '');
                   }}
                 />
               </div>
@@ -262,8 +275,40 @@ function Step2({ data, set, T }: { data: WizardData; set: <K extends keyof Wizar
             </div>
           )}
         </>
+      ) : isSports ? (
+        /* ── Sports: sport dropdown + location ── */
+        <>
+          <div>
+            <label style={lbl}>CHOOSE A SPORT *</label>
+            <select
+              style={{ ...inp, cursor: 'pointer' }}
+              value={data.game_name}
+              onChange={e => set('game_name', e.target.value)}
+            >
+              <option value="">Select a sport…</option>
+              {SPORTS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <MapPin size={11} /> VENUE / LOCATION
+            </label>
+            <p style={{ fontSize: 12, color: T.textMuted, margin: '0 0 8px', lineHeight: 1.5 }}>
+              Search for a court or field, or drag the map to pin the venue.
+            </p>
+            <Suspense fallback={<div style={{ height: 280, background: T.surfaceAlt, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.textMuted, fontSize: 13 }}>Loading map…</div>}>
+              <MapPicker value={data.location} onChange={loc => set('location', loc)} theme={mapTheme} />
+            </Suspense>
+            {data.location && (
+              <div style={{ marginTop: 10 }}>
+                <label style={lbl}>VENUE NAME (editable)</label>
+                <input style={inp} value={data.location.name} onChange={e => set('location', { ...data.location!, name: e.target.value })} placeholder="e.g. CDO Sports Complex, Pickleball Court 2" />
+              </div>
+            )}
+          </div>
+        </>
       ) : (
-        /* ── Non-gaming: map location ── */
+        /* ── Non-gaming, non-sports: map location ── */
         <div>
           <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 6 }}>
             <MapPin size={11} /> MEETUP LOCATION
@@ -555,7 +600,7 @@ function SuccessScreen({ room, onClose, T }: { room: Room; onClose: () => void; 
         </div>
       </div>
 
-      <button onClick={onClose} style={{ width: '100%', height: 48, borderRadius: 24, border: 'none', background: T.primary, color: T.bg, fontSize: 15, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
+      <button onClick={onClose} style={{ width: '100%', height: 48, borderRadius: 24, border: 'none', background: T.primary, color: isDark(T.primary) ? '#fff' : T.text, fontSize: 15, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer' }}>
         Done
       </button>
     </div>
@@ -598,13 +643,15 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
   const isRotary = data.category === 'rotary';
   const isGaming = data.category === 'gaming';
   const isCafe   = data.category === 'cafe';
+  const isSports = data.category === 'sports';
 
-  // Itinerary step only exists for Rotary rooms
   const STEPS_LIST = isRotary
     ? ['Info', 'Schedule', 'Itinerary', 'Access', 'Socials']
     : isGaming
       ? ['Info', 'Game & Schedule', 'Access', 'Socials']
-      : ['Info', 'Schedule', 'Access', 'Socials'];
+      : isSports
+        ? ['Info', 'Sport & Schedule', 'Access', 'Socials']
+        : ['Info', 'Schedule', 'Access', 'Socials'];
 
   // Access step index differs by category
   const accessStepIdx = isRotary ? 3 : 2;
@@ -623,8 +670,14 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
     if (step === 1 && !data.event_date) {
       return 'Event date and time are required.';
     }
+    if (step === 1 && data.event_date && new Date(data.event_date) <= new Date()) {
+      return 'The selected date and time has already passed. Please choose a future date and time.';
+    }
     if (step === 1 && isGaming && !data.game_name) {
       return 'Please choose a game for this lobby.';
+    }
+    if (step === 1 && isSports && !data.game_name) {
+      return 'Please choose a sport for this room.';
     }
     if (step === accessStepIdx && data.is_private && !data.password.trim()) {
       setTimeout(() => passwordRef.current?.focus(), 50);
@@ -688,10 +741,10 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
             <div>
               <h2 className="font-display" style={{ fontSize: 20, fontWeight: 800, color: T.text, margin: '0 0 2px' }}>
                 {createdRoom
-                  ? (isGaming ? 'Lobby Ready!' : isCafe ? 'Hangout Ready!' : 'Room Ready!')
+                  ? (isGaming ? 'Lobby Ready!' : isCafe ? 'Hangout Ready!' : isSports ? 'Sports Room Ready!' : 'Room Ready!')
                   : editing
-                    ? `Edit ${isGaming ? 'Lobby' : isCafe ? 'Hangout' : 'Room'}`
-                    : `New ${isGaming ? 'Lobby' : isCafe ? 'Hangout' : 'Room'}`}
+                    ? `Edit ${isGaming ? 'Lobby' : isCafe ? 'Hangout' : isSports ? 'Sports Room' : 'Room'}`
+                    : `New ${isGaming ? 'Lobby' : isCafe ? 'Hangout' : isSports ? 'Sports Room' : 'Room'}`}
               </h2>
               {!createdRoom && (
                 <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>
@@ -735,10 +788,10 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
               <button
                 onClick={next}
                 disabled={saving}
-                style={{ flex: 1, height: 46, borderRadius: 23, border: 'none', background: saving ? T.border : T.primary, color: saving ? T.textMuted : T.bg, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                style={{ flex: 1, height: 46, borderRadius: 23, border: 'none', background: saving ? T.border : T.primary, color: saving ? T.textMuted : isDark(T.primary) ? '#fff' : T.text, fontSize: 14, fontWeight: 700, fontFamily: 'inherit', cursor: saving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
                 {saving ? 'Saving…' : step === STEPS_LIST.length - 1
-                  ? <>{editing ? 'Save Changes' : isGaming ? 'Create Lobby' : isCafe ? 'Create Hangout' : 'Create Room'} <Check size={16} /></>
+                  ? <>{editing ? 'Save Changes' : isGaming ? 'Create Lobby' : isCafe ? 'Create Hangout' : isSports ? 'Create Sports Room' : 'Create Room'} <Check size={16} /></>
                   : <>Next <ChevronRight size={16} /></>}
               </button>
             </div>

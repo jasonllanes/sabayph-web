@@ -12,6 +12,7 @@ const CATEGORY_COLORS: Record<string, { primary: string; light: string; text: st
   rotary:    { primary: '#1A7A3C', light: '#D1FAE5', text: '#064E3B' },
   gaming:    { primary: '#A855F7', light: '#EDE9FE', text: '#4C1D95' },
   cafe:      { primary: '#5C3317', light: '#FDE8C8', text: '#5C3317' },
+  sports:    { primary: '#bee800', light: '#F0FD80', text: '#4A6200' },
   travel:    { primary: '#1C6E94', light: '#DBEAFE', text: '#1E3A5F' },
   hiking:    { primary: '#7F3B19', light: '#FEF3C7', text: '#7F3B19' },
   rideshare: { primary: '#043E81', light: '#DBEAFE', text: '#043E81' },

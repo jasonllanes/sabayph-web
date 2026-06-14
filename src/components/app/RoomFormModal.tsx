@@ -172,18 +172,9 @@ export default function RoomFormModal({ theme: T, editing, onClose, onSubmit }: 
             <label style={lbl}>EVENT DATE & TIME</label>
             <input style={inp} type="datetime-local" value={form.event_date} onChange={e => set('event_date', e.target.value)} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={lbl}>MAX MEMBERS</label>
-              <input style={inp} type="number" min={2} max={500} value={form.max_members} onChange={e => set('max_members', parseInt(e.target.value) || 20)} />
-            </div>
-            <div>
-              <label style={lbl}>STATUS</label>
-              <select style={{ ...inp, cursor: 'pointer' }} value={form.status} onChange={e => set('status', e.target.value as 'live' | 'soon')}>
-                <option value="soon">Soon</option>
-                <option value="live">Live</option>
-              </select>
-            </div>
+          <div>
+            <label style={lbl}>MAX MEMBERS</label>
+            <input style={inp} type="number" min={2} max={500} value={form.max_members} onChange={e => set('max_members', parseInt(e.target.value) || 20)} />
           </div>
 
           <br />

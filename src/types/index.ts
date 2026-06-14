@@ -11,7 +11,8 @@ export type ThemeKey =
   | 'gaming'
   | 'rideshare'
   | 'cafe'
-  | 'volunteer';
+  | 'volunteer'
+  | 'sports';
 
 export type CategoryId = Exclude<ThemeKey, 'heritage'>;
 

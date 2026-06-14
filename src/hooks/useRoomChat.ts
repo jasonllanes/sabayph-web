@@ -119,7 +119,7 @@ export function useRoomMessages(roomId?: string) {
     setMessages(prev => prev.filter(m => m.id !== msgId));
   }, []);
 
-  return { messages, loading, sendMessage, updateRoomMessage, deleteRoomMessage };
+  return { messages, loading, sendMessage, updateRoomMessage, deleteRoomMessage, refresh };
 }
 
 /** Returns all confirmed PasaBuy rooms the user owns or is a member of, for the group chat list. */

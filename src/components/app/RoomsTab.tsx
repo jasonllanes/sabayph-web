@@ -121,7 +121,7 @@ function ApplicantProfileModal({ profile, theme: T, onClose, headerLabel = 'APPL
   );
 }
 
-type RoomCategory = 'rotary' | 'pasabuy' | 'gaming' | 'cafe';
+type RoomCategory = 'rotary' | 'pasabuy' | 'gaming' | 'cafe' | 'sports';
 
 function RoomsSkeletonList({ theme: T }: { theme: Theme }) {
   return (
@@ -168,7 +168,7 @@ type RoomViewState = 'active' | 'queuing' | 'finished' | 'archived';
 
 function getRoomViewState(r: Room, now: Date): RoomViewState {
   if (r.status === 'completed') return 'finished';
-  if (r.status === 'cancelled') return 'archived';
+  if (r.status === 'cancelled' || r.status === 'archived') return 'archived';
   if (r.event_date && new Date(r.event_date) < now && r.status !== 'confirmed') return 'archived';
   const isFull = r.member_count >= r.max_members;
   if (r.status === 'confirmed') return 'active';
@@ -205,7 +205,8 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
   const pasabuyTheme = { ...T, primary: THEMES.pasabuy.primary, accent: THEMES.pasabuy.accent, highlight: THEMES.pasabuy.highlight, border: THEMES.pasabuy.border };
   const gamingTheme  = { ...T, primary: '#7C3AED', accent: '#A855F7', bg: T.bg };
   const cafeTheme    = { ...T, primary: '#92400E', accent: '#D97706', bg: T.bg };
-  const activeTheme  = categoryTab === 'pasabuy' ? pasabuyTheme : categoryTab === 'gaming' ? gamingTheme : categoryTab === 'cafe' ? cafeTheme : T;
+  const sportsTheme  = { ...T, primary: '#bee800', accent: '#7A9E00', border: '#CBDE00' };
+  const activeTheme  = categoryTab === 'pasabuy' ? pasabuyTheme : categoryTab === 'gaming' ? gamingTheme : categoryTab === 'cafe' ? cafeTheme : categoryTab === 'sports' ? sportsTheme : T;
 
   const ownedRoomIds = rooms.filter(r => r.user_id === userId).map(r => r.id);
   const { requests, approveRequest, rejectRequest } = useRoomJoinRequests(ownedRoomIds);
@@ -378,6 +379,47 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
     });
   };
 
+  // ── Sports handlers ──────────────────────────────────────────────────────────
+
+  const handleSportsCreate = async (data: WizardData) => {
+    const { location, game_name, game_id, ...rest } = data;
+    return createRoom({
+      ...rest,
+      category:      'sports',
+      event_date:    rest.event_date    || null,
+      next_event:    rest.next_event    || null,
+      password:      rest.password      || null,
+      description:   rest.description   || null,
+      location_lat:  location?.lat       ?? null,
+      location_lng:  location?.lng       ?? null,
+      location_name: location?.name      || null,
+      facebook_url:  rest.facebook_url  || null,
+      instagram_url: rest.instagram_url || null,
+      twitter_url:   rest.twitter_url   || null,
+      game_name:     game_name          || null,
+      game_id:       null,
+    } as Parameters<typeof createRoom>[0]);
+  };
+
+  const handleSportsUpdate = async (id: string, data: Partial<WizardData>) => {
+    const { location, game_name, game_id, ...rest } = data;
+    return updateRoom(id, {
+      ...rest,
+      event_date:    rest.event_date    || null,
+      next_event:    rest.next_event    || null,
+      password:      rest.password      || null,
+      description:   rest.description   || null,
+      location_lat:  location?.lat       ?? null,
+      location_lng:  location?.lng       ?? null,
+      location_name: location?.name      || null,
+      facebook_url:  rest.facebook_url  || null,
+      instagram_url: rest.instagram_url || null,
+      twitter_url:   rest.twitter_url   || null,
+      game_name:     game_name          || null,
+      game_id:       null,
+    });
+  };
+
   // ── PasaBuy handlers ─────────────────────────────────────────────────────────
 
   // PasaBuyWizard builds an explicit DB payload before calling onCreate/onUpdate,
@@ -410,19 +452,20 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700;800&family=VT323&display=swap'); .font-display{font-family:'Bricolage Grotesque',serif;letter-spacing:-0.02em;} .font-pixel{font-family:'VT323',monospace;}`}</style>
 
       {/* Category switcher */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20, padding: '4px', background: T.surfaceAlt, borderRadius: 20, border: `1.5px solid ${T.border}` }}>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 20, padding: '4px', background: T.surfaceAlt, borderRadius: 20, border: `1.5px solid ${T.border}`, overflowX: 'auto' }}>
         {([
-          { id: 'rotary'  as const, label: 'Rotary',  accent: T.primary,              icon: <HeartHandshake size={15} /> },
-          { id: 'pasabuy' as const, label: 'PasaBuy', accent: THEMES.pasabuy.primary, icon: <ShoppingBasket size={15} /> },
-          { id: 'gaming'  as const, label: 'Gaming',  accent: '#7C3AED',              icon: <span style={{ fontSize: 15 }}>🎮</span> },
-          { id: 'cafe'    as const, label: 'Cafe',    accent: '#92400E',              icon: <span style={{ fontSize: 15 }}>☕</span> },
-        ]).map(({ id, label, accent, icon }) => {
+          { id: 'rotary'  as const, label: 'Rotary',  accent: T.primary,              activeColor: '#fff',     icon: <HeartHandshake size={14} /> },
+          { id: 'pasabuy' as const, label: 'PasaBuy', accent: THEMES.pasabuy.primary, activeColor: '#fff',     icon: <ShoppingBasket size={14} /> },
+          { id: 'gaming'  as const, label: 'Gaming',  accent: '#7C3AED',              activeColor: '#fff',     icon: <span style={{ fontSize: 14 }}>🎮</span> },
+          { id: 'cafe'    as const, label: 'Cafe',    accent: '#92400E',              activeColor: '#fff',     icon: <span style={{ fontSize: 14 }}>☕</span> },
+          { id: 'sports'  as const, label: 'Sports',  accent: '#bee800',              activeColor: '#1A2800',  icon: <span style={{ fontSize: 14 }}>⚽</span> },
+        ]).map(({ id, label, accent, activeColor, icon }) => {
           const active = categoryTab === id;
           return (
             <button
               key={id}
               onClick={() => { setCategoryTab(id); setRoomsView('active'); setWizardOpen(false); setEditing(null); }}
-              style={{ flex: 1, height: 40, borderRadius: 16, border: 'none', background: active ? accent : 'transparent', color: active ? '#fff' : T.textMuted, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, transition: 'all 200ms ease' }}
+              style={{ flex: 1, minWidth: 64, height: 40, borderRadius: 16, border: 'none', background: active ? accent : 'transparent', color: active ? activeColor : T.textMuted, fontSize: 12, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, transition: 'all 200ms ease', whiteSpace: 'nowrap' }}
             >
               <span style={{ display: 'flex', alignItems: 'center', opacity: active ? 1 : 0.6 }}>{icon}</span>
               {label}
@@ -434,10 +477,10 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
           <p className="font-pixel" style={{ fontSize: 13, color: TT.accent, margin: '0 0 3px', letterSpacing: 1 }}>
-            {categoryTab === 'pasabuy' ? 'PASABUY REQUESTS' : categoryTab === 'gaming' ? 'GAMING ROOMS' : categoryTab === 'cafe' ? 'CAFE ROOMS' : 'ROTARY ROOMS'}
+            {categoryTab === 'pasabuy' ? 'PASABUY REQUESTS' : categoryTab === 'gaming' ? 'GAMING ROOMS' : categoryTab === 'cafe' ? 'CAFE ROOMS' : categoryTab === 'sports' ? 'SPORTS ROOMS' : 'ROTARY ROOMS'}
           </p>
           <h2 className="font-display" style={{ fontSize: 22, fontWeight: 800, color: TT.text, margin: 0 }}>
-            {categoryTab === 'pasabuy' ? 'Your buy requests.' : categoryTab === 'gaming' ? 'Your game lobbies.' : categoryTab === 'cafe' ? 'Your cafe hangouts.' : 'Your sabay spaces.'}
+            {categoryTab === 'pasabuy' ? 'Your buy requests.' : categoryTab === 'gaming' ? 'Your game lobbies.' : categoryTab === 'cafe' ? 'Your cafe hangouts.' : categoryTab === 'sports' ? 'Your sports rooms.' : 'Your sabay spaces.'}
           </h2>
         </div>
         <button
@@ -445,7 +488,7 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
           disabled={!loading && activeRooms.length > 0}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px', height: 40, borderRadius: 20, border: 'none', background: (!loading && activeRooms.length > 0) ? TT.border : TT.primary, color: (!loading && activeRooms.length > 0) ? TT.textMuted : TT.bg, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: (!loading && activeRooms.length > 0) ? 'not-allowed' : 'pointer', opacity: (!loading && activeRooms.length > 0) ? 0.6 : 1, transition: 'all 200ms' }}
         >
-          <Plus size={16} /> {categoryTab === 'pasabuy' ? 'New Request' : categoryTab === 'gaming' ? 'New Lobby' : categoryTab === 'cafe' ? 'New Hangout' : 'New Room'}
+          <Plus size={16} /> {categoryTab === 'pasabuy' ? 'New Request' : categoryTab === 'gaming' ? 'New Lobby' : categoryTab === 'cafe' ? 'New Hangout' : categoryTab === 'sports' ? 'New Sports Room' : 'New Room'}
         </button>
       </div>
 
@@ -454,7 +497,7 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', background: '#FEF3E2', borderRadius: 12, border: '1px solid #F9C07E', marginBottom: 16 }}>
           <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
           <p style={{ fontSize: 12, color: '#92400E', margin: 0, lineHeight: 1.5 }}>
-            You already have an active {categoryTab === 'pasabuy' ? 'PasaBuy request' : categoryTab === 'gaming' ? 'gaming lobby' : categoryTab === 'cafe' ? 'cafe hangout' : 'room'}. Complete, confirm, or delete it before creating a new one.
+            You already have an active {categoryTab === 'pasabuy' ? 'PasaBuy request' : categoryTab === 'gaming' ? 'gaming lobby' : categoryTab === 'cafe' ? 'cafe hangout' : categoryTab === 'sports' ? 'sports room' : 'room'}. Complete, confirm, or delete it before creating a new one.
           </p>
         </div>
       )}
@@ -485,12 +528,13 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
           {displayRooms.map(room => {
             const isOwner = room.user_id === userId;
-            const isArchived = room.status === 'completed' || room.status === 'cancelled' || !room.event_date || new Date(room.event_date) < now;
+            const isArchived = room.status === 'completed' || room.status === 'cancelled' || room.status === 'archived' || (!!room.event_date && new Date(room.event_date) < now && room.status !== 'confirmed');
             const fill = Math.min((room.member_count / room.max_members) * 100, 100);
             const eventDisplay = room.event_date ? formatEventDate(room.event_date) : room.next_event;
             const isPasaBuy = categoryTab === 'pasabuy';
             const isGaming  = categoryTab === 'gaming';
             const isCafe    = categoryTab === 'cafe';
+            const isSports  = categoryTab === 'sports';
 
             return (
               <div key={room.id}
@@ -571,24 +615,27 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
                         ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#EDE9FE', color: '#7C3AED', padding: '3px 10px', borderRadius: 20, border: '1px solid #C4B5FD' }}><img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/gaming.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Gaming</span>
                         : isCafe
                           ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#92400E', padding: '3px 10px', borderRadius: 20, border: '1px solid #D97706AA' }}><img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/coffee.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Cafe</span>
-                          : <span style={{ fontSize: 11, fontWeight: 700, background: '#F4ECDF', color: '#9F5E0F', padding: '3px 10px', borderRadius: 20, border: '1px solid #9F5E0F44' }}>Rotary</span>
+                          : isSports
+                            ? <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, background: '#F0FD80', color: '#4A6200', padding: '3px 10px', borderRadius: 20, border: '1px solid #bee800' }}><img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sports.png" alt="" style={{ width: 13, height: 13, objectFit: 'contain' }} /> Sports</span>
+                            : <span style={{ fontSize: 11, fontWeight: 700, background: '#F4ECDF', color: '#9F5E0F', padding: '3px 10px', borderRadius: 20, border: '1px solid #9F5E0F44' }}>Rotary</span>
                       }
                       {isArchived && <span style={{ fontSize: 10, fontWeight: 700, background: TT.border, color: TT.textMuted, padding: '2px 8px', borderRadius: 8 }}>📦 ARCHIVED</span>}
                       {room.status === 'confirmed' && <span style={{ fontSize: 10, fontWeight: 700, background: '#DCFCE7', color: '#15803D', padding: '2px 8px', borderRadius: 8, border: '1px solid #86EFAC' }}>✅ CONFIRMED</span>}
                       {!isArchived && room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 700, background: '#C82718', color: '#F1EDE1', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
                       {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: TT.surfaceAlt, color: TT.textMuted, padding: '2px 8px', borderRadius: 8, border: `1px solid ${TT.border}` }}><Lock size={9} /> PRIVATE</span>}
                       {isOwner && (() => { const cnt = requests.filter(r => r.room_id === room.id).length; return cnt > 0 && room.status !== 'confirmed' ? <span style={{ fontSize: 10, fontWeight: 700, background: TT.accent, color: '#fff', padding: '2px 8px', borderRadius: 8 }}>🔔 {cnt} request{cnt !== 1 ? 's' : ''}</span> : null; })()}
-                      {isOwner && <span style={{ fontSize: 10, fontWeight: 700, background: TT.primary, color: TT.bg, padding: '2px 8px', borderRadius: 8, marginLeft: 'auto' }}>YOUR {isGaming ? 'LOBBY' : isCafe ? 'HANGOUT' : 'ROOM'}</span>}
+                      {isOwner && <span style={{ fontSize: 10, fontWeight: 700, background: TT.primary, color: isSports ? '#1A2800' : TT.bg, padding: '2px 8px', borderRadius: 8, marginLeft: 'auto' }}>YOUR {isGaming ? 'LOBBY' : isCafe ? 'HANGOUT' : isSports ? 'SPORTS ROOM' : 'ROOM'}</span>}
                     </div>
 
                     <h3 className="font-display" style={{ fontSize: 16, fontWeight: 800, color: TT.text, margin: '0 0 8px' }}>{room.name}</h3>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                       {isGaming && room.game_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>🎮 {room.game_name}</span>}
+                      {isSports && room.game_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>⚽ {room.game_name}</span>}
                       {room.location_name && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>📍 {room.location_name}</span>}
                       {eventDisplay && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TT.textMuted, background: TT.surfaceAlt, padding: '3px 9px', borderRadius: 12, border: `1px solid ${TT.border}` }}>📅 {eventDisplay}</span>}
                     </div>
                     <div style={{ marginBottom: 10 }}>
-                      <span style={{ fontSize: 11, color: TT.textMuted }}><Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{room.member_count} / {room.max_members} {isGaming ? 'players' : isCafe ? 'guests' : 'members'}</span>
+                      <span style={{ fontSize: 11, color: TT.textMuted }}><Users size={11} style={{ marginRight: 4, verticalAlign: 'middle' }} />{room.member_count} / {room.max_members} {isGaming ? 'players' : isCafe ? 'guests' : isSports ? 'players' : 'members'}</span>
                       <div style={{ height: 4, background: TT.surfaceAlt, borderRadius: 3, overflow: 'hidden', marginTop: 4 }}>
                         <div style={{ height: '100%', borderRadius: 3, width: `${fill}%`, background: TT.primary }} />
                       </div>
@@ -705,10 +752,10 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
                 })()}
 
                 {/* Owner actions */}
-                {isOwner && !isArchived && (
+                {isOwner && (
                   <div style={{ borderTop: `1px solid ${TT.border}`, padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {/* End Room swipe — only for non-PasaBuy rooms */}
-                    {categoryTab !== 'pasabuy' && (
+                    {/* End Room swipe — only for active/queuing non-PasaBuy rooms */}
+                    {!isArchived && categoryTab !== 'pasabuy' && (
                       <SwipeToConfirm
                         label="Slide to end room"
                         sublabel="Only you as the host can end this room"
@@ -720,11 +767,13 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
                       />
                     )}
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => openEdit(room)} style={{ flex: 1, height: 36, borderRadius: 10, border: `1.5px solid ${TT.border}`, background: TT.surfaceAlt, color: TT.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        <Edit2 size={13} /> Edit
-                      </button>
-                      <button onClick={() => handleDelete(room)} disabled={!!deletingId} style={{ flex: 1, height: 36, borderRadius: 10, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        <Trash2 size={13} /> Delete
+                      {!isArchived && (
+                        <button onClick={() => openEdit(room)} style={{ flex: 1, height: 36, borderRadius: 10, border: `1.5px solid ${TT.border}`, background: TT.surfaceAlt, color: TT.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                          <Edit2 size={13} /> Edit
+                        </button>
+                      )}
+                      <button onClick={() => handleDelete(room)} disabled={!!deletingId} style={{ flex: isArchived ? 'none' : 1, width: isArchived ? '100%' : undefined, height: 36, borderRadius: 10, border: '1.5px solid #FCA5A5', background: '#FEF2F2', color: '#B91C1C', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: deletingId ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: deletingId === room.id ? 0.5 : 1 }}>
+                        <Trash2 size={13} /> {deletingId === room.id ? 'Deleting…' : 'Delete'}
                       </button>
                     </div>
                   </div>
@@ -1257,6 +1306,19 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
           onClose={() => { setWizardOpen(false); setEditing(null); }}
           onCreate={handleCafeCreate}
           onUpdate={handleCafeUpdate}
+        />
+      )}
+
+      {/* Sports Wizard */}
+      {wizardOpen && categoryTab === 'sports' && (
+        <RoomWizard
+          theme={{ ...T, primary: '#bee800', accent: '#7A9E00', border: '#CBDE00' }}
+          editing={editing}
+          initialCategory="sports"
+          userId={userId}
+          onClose={() => { setWizardOpen(false); setEditing(null); }}
+          onCreate={handleSportsCreate}
+          onUpdate={handleSportsUpdate}
         />
       )}
 

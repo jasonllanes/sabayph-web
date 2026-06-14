@@ -175,7 +175,7 @@ export function useChat(userId?: string, partnerId?: string) {
     setMessages(prev => prev.filter(m => m.id !== msgId));
   }, []);
 
-  return { messages, loading, sending, sendMessage, updateMessage, deleteMessage };
+  return { messages, loading, sending, sendMessage, updateMessage, deleteMessage, refresh: fetch };
 }
 
 export function useUnreadCount(userId?: string) {

@@ -380,7 +380,7 @@ export default function AppShell({ user, onLogout, initialProfileTag }: AppShell
 
         <div style={{ flexShrink: 0, position: 'relative', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: `${theme.bg}F0`, borderBottom: `1.5px solid ${theme.border}`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', transition: 'all 600ms ease' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png" alt="SabayPH" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', border: `2px solid ${theme.primary}` }} />
+            <img src="/sabayph_logo_tp.png" alt="SabayPH" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'cover', border: `2px solid ${theme.primary}` }} />
             <span className="font-display" style={{ fontSize: 18, fontWeight: 800, color: theme.text }}>
               Sabay<span style={{ color: theme.primary }}>PH</span>
             </span>

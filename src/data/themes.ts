@@ -2,7 +2,7 @@ import {
   Mountain, Plane, Gamepad2, Car, Coffee, HeartHandshake, Users,
   Shield, MapPin, Sparkles, CalendarCheck, Star, Globe, Compass,
   Zap, Trophy, Route, Wallet, BookOpen, HandHeart, ShoppingBasket,
-  Package, Calculator, Handshake,
+  Package, Calculator, Handshake, Dumbbell,
 } from 'lucide-react';
 import type { Category, CategoryDetail, CategoryId, Feature, Theme, ThemeKey, TrustItem } from '@/types';
 
@@ -128,6 +128,20 @@ export const THEMES: Record<ThemeKey, Theme> = {
     border: '#FDE68A',
     badge: 'bg-[#CA8A04] text-[#FEFCE8]',
   },
+  // ── Sports: Electric Lime ─────────────────────────────────────────────────
+  sports: {
+    name: 'Sports',
+    bg: '#F6FDD0',
+    surface: '#FFFFFF',
+    surfaceAlt: '#ECFB9E',
+    primary: '#bee800',
+    accent: '#7A9E00',
+    highlight: '#D4FF00',
+    text: '#1A2800',
+    textMuted: '#4A6200',
+    border: '#CBDE00',
+    badge: 'bg-[#bee800] text-[#1A2800]',
+  },
 };
 
 export const CATEGORIES: Category[] = [
@@ -136,6 +150,7 @@ export const CATEGORIES: Category[] = [
   { id: 'rotary',    name: 'Rotary',     tagline: 'Service above self',           Icon: HeartHandshake,  status: 'live', image: 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/rotary.png' },
   { id: 'gaming',    name: 'Gaming',     tagline: 'Squad up, laro tayo',          Icon: Gamepad2,        status: 'live', image: 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/gaming.png' },
   { id: 'cafe',      name: 'Café',       tagline: 'Kape catch-ups',               Icon: Coffee,          status: 'live', image: 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/coffee.png' },
+  { id: 'sports',    name: 'Sports',     tagline: 'Laro na, sabay-sabay!',        Icon: Dumbbell,        status: 'live', image: 'https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sports.png' },
   { id: 'travel',    name: 'Travel',     tagline: 'Find your kasama',             Icon: Plane,           status: 'soon', image: null },
   { id: 'hiking',    name: 'Hiking',     tagline: 'Akyat together',               Icon: Mountain,        status: 'soon', image: null },
   { id: 'rideshare', name: 'Ride-share', tagline: 'Split the sakay',              Icon: Car,             status: 'soon', image: null },
@@ -245,6 +260,19 @@ export const CATEGORY_DETAILS: Record<CategoryId, CategoryDetail> = {
       { value: '8+',   label: 'NGO partners' },
       { value: '30+',  label: 'Drives planned' },
       { value: 'Soon', label: 'Go live' },
+    ],
+  },
+  sports: {
+    description: 'Find kasama for your next pickleball match, basketball game, or any sport. Organize pick-up games, reserve courts, and connect with players of all skill levels near you.',
+    highlights: [
+      { Icon: Dumbbell,      label: 'Pickleball, basketball, and more' },
+      { Icon: MapPin,        label: 'Find courts & venues near you' },
+      { Icon: Trophy,        label: 'Pick-up games & organized leagues' },
+    ],
+    stats: [
+      { value: 'Live', label: 'Now open' },
+      { value: '10+',  label: 'Sports listed' },
+      { value: 'Any',  label: 'Skill level' },
     ],
   },
 };

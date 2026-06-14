@@ -1031,7 +1031,7 @@ export default function DiscoverTab({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <img
-              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png"
+              src="/sabayph_logo_tp.png"
               alt=""
               style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover', transform: `rotate(${ptY * 3}deg)`, transition: 'none' }}
             />
@@ -1049,7 +1049,7 @@ export default function DiscoverTab({
           <style>{`@keyframes ptr-bounce{0%,100%{transform:translateY(0);opacity:0.5}50%{transform:translateY(-8px);opacity:1}}`}</style>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <img
-              src="https://ajyaecxypxtzahjhezwy.supabase.co/storage/v1/object/public/app_images/sabayph_logo.png"
+              src="/sabayph_logo_tp.png"
               alt="SabayPH"
               style={{ width: 56, height: 56, borderRadius: 14, objectFit: 'cover', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
             />

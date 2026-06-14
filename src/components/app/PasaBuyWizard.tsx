@@ -219,19 +219,10 @@ function Step1({ data, set, T }: { data: PasaBuyWizardData; set: <K extends keyo
           placeholder="Any extra details for the buyer…"
         />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div>
-          <label style={lbl}>MAX AGENTS</label>
-          <input style={inp} type="number" min={1} max={20} value={data.max_members} onChange={e => set('max_members', parseInt(e.target.value) || 5)} />
-          <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 0' }}>How many buyers can apply</p>
-        </div>
-        <div>
-          <label style={lbl}>STATUS</label>
-          <select style={{ ...inp, cursor: 'pointer' }} value={data.status} onChange={e => set('status', e.target.value as 'live' | 'soon')}>
-            <option value="live">Live</option>
-            <option value="soon">Soon</option>
-          </select>
-        </div>
+      <div>
+        <label style={lbl}>MAX AGENTS</label>
+        <input style={inp} type="number" min={1} max={20} value={data.max_members} onChange={e => set('max_members', parseInt(e.target.value) || 5)} />
+        <p style={{ fontSize: 11, color: T.textMuted, margin: '4px 0 0' }}>How many buyers can apply</p>
       </div>
     </div>
   );

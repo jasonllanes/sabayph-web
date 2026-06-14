@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { ArrowLeft, Send, MessageSquare, UserPlus, Search, X, Loader, Users, Info, MoreVertical } from 'lucide-react';
 import { useConversations, useChat } from '@/hooks/useMessages';
 import { useRoomChats, useRoomMessages } from '@/hooks/useRoomChat';
@@ -47,6 +47,103 @@ async function loadReactionsFromDB(messageIds: string[], contextType: 'dm' | 'gr
   } catch {
     return {};
   }
+}
+
+// ── Pull-to-refresh ──────────────────────────────────────────────────────────
+
+function PullToRefresh({ children, onRefresh, theme: T, style }: {
+  children: ReactNode;
+  onRefresh: () => Promise<void> | void;
+  theme: Theme;
+  style?: React.CSSProperties;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const startYRef = useRef(0);
+  const pullYRef = useRef(0);
+  const refreshingRef = useRef(false);
+  const onRefreshRef = useRef(onRefresh);
+  const [pullDisplay, setPullDisplay] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  const THRESHOLD = 68;
+
+  useEffect(() => { onRefreshRef.current = onRefresh; }, [onRefresh]);
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if ((containerRef.current?.scrollTop ?? 0) > 2 || refreshingRef.current) return;
+    startYRef.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!startYRef.current || refreshingRef.current) return;
+    if ((containerRef.current?.scrollTop ?? 0) > 2) { startYRef.current = 0; return; }
+    const dy = e.touches[0].clientY - startYRef.current;
+    if (dy > 0) {
+      const clamped = Math.min(dy * 0.5, THRESHOLD + 16);
+      pullYRef.current = clamped;
+      setPullDisplay(clamped);
+      setPulling(true);
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback(async () => {
+    const py = pullYRef.current;
+    startYRef.current = 0;
+    pullYRef.current = 0;
+    setPulling(false);
+    if (py >= THRESHOLD && !refreshingRef.current) {
+      refreshingRef.current = true;
+      setRefreshing(true);
+      setPullDisplay(THRESHOLD);
+      try { await onRefreshRef.current(); } finally {
+        refreshingRef.current = false;
+        setRefreshing(false);
+        setPullDisplay(0);
+      }
+    } else {
+      setPullDisplay(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchmove', handleTouchMove, { passive: true });
+    el.addEventListener('touchend', handleTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove', handleTouchMove);
+      el.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
+
+  const progress = Math.min(pullDisplay / THRESHOLD, 1);
+
+  return (
+    <div ref={containerRef} style={{ overflowY: 'auto', ...style }}>
+      <div style={{
+        height: refreshing ? 52 : pullDisplay,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
+        transition: pulling ? 'none' : 'height 200ms ease-out',
+        flexShrink: 0,
+      }}>
+        {(pullDisplay > 4 || refreshing) && (
+          <div style={{
+            width: 26, height: 26, borderRadius: '50%',
+            border: `2.5px solid ${T.border}`,
+            borderTopColor: T.primary,
+            animation: refreshing ? 'spin 0.8s linear infinite' : 'none',
+            transform: !refreshing ? `rotate(${progress * 270}deg)` : undefined,
+            transition: (!refreshing && pulling) ? 'none' : 'opacity 150ms',
+            opacity: refreshing ? 1 : Math.min(progress * 1.5, 1),
+          }} />
+        )}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 // ── Emoji picker popup ───────────────────────────────────────────────────────
@@ -199,7 +296,7 @@ function NewConvPicker({ userId, theme: T, onPick, onClose }: { userId: string; 
 function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onBack }: {
   userId: string; partnerId: string; partnerName: string; partnerAvatar: string; theme: Theme; onBack: () => void;
 }) {
-  const { messages, loading, sending, sendMessage, updateMessage, deleteMessage } = useChat(userId, partnerId);
+  const { messages, loading, sending, sendMessage, updateMessage, deleteMessage, refresh } = useChat(userId, partnerId);
   const [draft, setDraft] = useState('');
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -269,7 +366,7 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: T.surface, borderBottom: `1.5px solid ${T.border}` }}>
+      <div style={{ flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: T.surface, borderBottom: `1.5px solid ${T.border}` }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, display: 'flex', padding: 4 }}>
           <ArrowLeft size={20} />
         </button>
@@ -280,7 +377,8 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <PullToRefresh onRefresh={refresh} theme={T} style={{ flex: 1 }}>
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 4, minHeight: '100%' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: T.textMuted, gap: 8 }}>
             <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading…
@@ -376,7 +474,8 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
           })
         )}
         <div ref={bottomRef} />
-      </div>
+        </div>
+      </PullToRefresh>
 
       <div style={{ flexShrink: 0, display: 'flex', gap: 8, padding: '12px 16px', background: T.surface, borderTop: `1.5px solid ${T.border}` }}>
         <input
@@ -401,7 +500,7 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
 function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T, onBack }: {
   userId: string; userName: string; roomId: string; roomName: string; joinCode: string; theme: Theme; onBack: () => void;
 }) {
-  const { messages, loading, sendMessage, updateRoomMessage, deleteRoomMessage } = useRoomMessages(roomId);
+  const { messages, loading, sendMessage, updateRoomMessage, deleteRoomMessage, refresh } = useRoomMessages(roomId);
   const [draft, setDraft] = useState('');
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
@@ -545,7 +644,7 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: T.surface, borderBottom: `1.5px solid ${T.border}` }}>
+      <div style={{ flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: T.surface, borderBottom: `1.5px solid ${T.border}` }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.textMuted, padding: 4, display: 'flex', flexShrink: 0 }}>
           <ArrowLeft size={20} />
         </button>
@@ -579,7 +678,8 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
       )}
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <PullToRefresh onRefresh={refresh} theme={T} style={{ flex: 1 }}>
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 4, minHeight: '100%' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: T.textMuted, gap: 8 }}>
             <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading…
@@ -689,7 +789,8 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
           })
         )}
         <div ref={bottomRef} />
-      </div>
+        </div>
+      </PullToRefresh>
 
       {/* Input */}
       <div style={{ flexShrink: 0, display: 'flex', gap: 8, padding: '12px 16px', background: T.surface, borderTop: `1.5px solid ${T.border}` }}>
@@ -761,8 +862,8 @@ type ActiveChat =
   | { kind: 'group'; roomId: string; roomName: string; joinCode: string };
 
 export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
-  const { conversations, loading: dmLoading } = useConversations(userId);
-  const { chats: groupChats, loading: gcLoading } = useRoomChats(userId);
+  const { conversations, loading: dmLoading, refresh: refreshDMs } = useConversations(userId);
+  const { chats: groupChats, loading: gcLoading, refresh: refreshGCs } = useRoomChats(userId);
   const [activeChat, setActiveChat] = useState<ActiveChat | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [userName, setUserName] = useState('');
@@ -807,10 +908,14 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
 
   const loading = dmLoading || gcLoading;
 
+  const handleRefreshInbox = useCallback(async () => {
+    await Promise.all([refreshDMs(), refreshGCs()]);
+  }, [refreshDMs, refreshGCs]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <div style={{ padding: '24px 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ flexShrink: 0, padding: '24px 16px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: T.bg }}>
         <div>
           <p className="font-pixel" style={{ fontSize: 13, color: T.accent, margin: '0 0 2px', letterSpacing: 1 }}>DIRECT MESSAGES</p>
           <h2 className="font-display" style={{ fontSize: 22, fontWeight: 800, color: T.text, margin: 0 }}>Messages</h2>
@@ -821,7 +926,7 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
         </button>
       </div>
 
-      <div style={{ flex: 1, padding: '0 8px' }}>
+      <PullToRefresh onRefresh={handleRefreshInbox} theme={T} style={{ flex: 1, padding: '0 8px' }}>
         {loading ? (
           <ConversationsSkeleton theme={T} />
         ) : (
@@ -900,7 +1005,7 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
             )}
           </>
         )}
-      </div>
+      </PullToRefresh>
 
       {showPicker && userId && (
         <NewConvPicker
