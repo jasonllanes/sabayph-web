@@ -8,6 +8,7 @@ export interface Message {
   content: string;
   read_at: string | null;
   created_at: string;
+  edited_at?: string | null;
 }
 
 export interface Conversation {
@@ -131,6 +132,16 @@ export function useChat(userId?: string, partnerId?: string) {
           }
         }
       })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
+        const m = payload.new as Message;
+        if ((m.sender_id === userId && m.recipient_id === partnerId) ||
+            (m.sender_id === partnerId && m.recipient_id === userId)) {
+          setMessages(prev => prev.map(msg => msg.id === m.id ? m : msg));
+        }
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
+        setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetch, userId, partnerId]);
@@ -146,7 +157,25 @@ export function useChat(userId?: string, partnerId?: string) {
     setSending(false);
   }, [userId, partnerId]);
 
-  return { messages, loading, sending, sendMessage };
+  const updateMessage = useCallback(async (msgId: string, content: string) => {
+    if (!content.trim()) return;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('messages')
+      .update({ content: content.trim(), edited_at: now })
+      .eq('id', msgId);
+    if (error) {
+      // edited_at column may not exist yet — update content only
+      await supabase.from('messages').update({ content: content.trim() }).eq('id', msgId);
+    }
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: content.trim(), edited_at: now } : m));
+  }, []);
+
+  const deleteMessage = useCallback(async (msgId: string) => {
+    await supabase.from('messages').delete().eq('id', msgId);
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+  }, []);
+
+  return { messages, loading, sending, sendMessage, updateMessage, deleteMessage };
 }
 
 export function useUnreadCount(userId?: string) {

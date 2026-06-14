@@ -197,6 +197,10 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
   const [togglingAutoMatch, setTogglingAutoMatch] = useState(false);
   const [roomDetailId, setRoomDetailId] = useState<string | null>(null);
   const [shareRoomId, setShareRoomId] = useState<string | null>(null);
+  const [membersExpandedId, setMembersExpandedId] = useState<string | null>(null);
+  const [membersData, setMembersData] = useState<Record<string, { user_id: string; display_name: string }[]>>({});
+  const [membersLoadingId, setMembersLoadingId] = useState<string | null>(null);
+  const [copiedPhone, setCopiedPhone] = useState(false);
 
   const pasabuyTheme = { ...T, primary: THEMES.pasabuy.primary, accent: THEMES.pasabuy.accent, highlight: THEMES.pasabuy.highlight, border: THEMES.pasabuy.border };
   const gamingTheme  = { ...T, primary: '#7C3AED', accent: '#A855F7', bg: T.bg };
@@ -217,6 +221,18 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
       .eq('id', applicantUserId)
       .maybeSingle();
     if (data) setViewingApplicant(data as DiscoverProfile);
+  };
+
+  const fetchRoomMembers = async (roomId: string) => {
+    if (membersData[roomId] !== undefined) return;
+    setMembersLoadingId(roomId);
+    const { data } = await supabase
+      .from('join_requests')
+      .select('user_id, display_name')
+      .eq('room_id', roomId)
+      .eq('status', 'approved');
+    setMembersData(prev => ({ ...prev, [roomId]: (data as { user_id: string; display_name: string }[]) ?? [] }));
+    setMembersLoadingId(null);
   };
 
   const handleViewHostProfile = async (hostUserId: string) => {
@@ -958,11 +974,12 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
         const detailEventDisplay = detailRoom.event_date ? formatEventDate(detailRoom.event_date) : detailRoom.next_event;
         const hasItineraryDetail = detailRoom.itinerary && detailRoom.itinerary.length > 0;
         const isItinExpanded = expandedId === detailRoom.id;
+        const mobileEntry = (detailRoom.other_socials ?? []).find(s => s.label === 'Mobile' && s.url);
         const detailSocials = [
           detailRoom.facebook_url && { Icon: FacebookIcon, url: detailRoom.facebook_url, color: '#1877F2' },
           detailRoom.instagram_url && { Icon: InstagramIcon, url: detailRoom.instagram_url, color: '#E4405F' },
           detailRoom.twitter_url && { Icon: TwitterIcon, url: detailRoom.twitter_url, color: '#1DA1F2' },
-          ...(detailRoom.other_socials ?? []).filter(s => s.url).map(s => ({ Icon: null, url: s.url, label: s.label, color: DT.primary })),
+          ...(detailRoom.other_socials ?? []).filter(s => s.url && s.label !== 'Mobile').map(s => ({ Icon: null, url: s.url, label: s.label, color: DT.primary })),
         ].filter(Boolean);
 
         return (
@@ -1021,23 +1038,105 @@ export default function RoomsTab({ theme: T, userId, userAvatarUrl }: RoomsTabPr
               )}
 
               {/* Members */}
-              <div style={{ margin: '14px 20px 0', padding: '14px', background: DT.surfaceAlt, borderRadius: 16, border: `1px solid ${DT.border}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: DT.text }}>
-                    <Users size={13} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-                    {isGD ? 'Players' : isCD ? 'Guests' : 'Members'}
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: DT.primary }}>{detailRoom.member_count} / {detailRoom.max_members}</span>
-                </div>
-                <div style={{ height: 6, background: DT.surface, borderRadius: 3, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', borderRadius: 3, width: `${detailFill}%`, background: DT.primary, transition: 'width 600ms' }} />
-                </div>
+              <div style={{ margin: '14px 20px 0', background: DT.surfaceAlt, borderRadius: 16, border: `1px solid ${DT.border}`, overflow: 'hidden' }}>
+                <button
+                  onClick={() => {
+                    const next = membersExpandedId === detailRoom.id ? null : detailRoom.id;
+                    setMembersExpandedId(next);
+                    if (next) fetchRoomMembers(detailRoom.id);
+                  }}
+                  style={{ width: '100%', padding: '14px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: DT.text }}>
+                      <Users size={13} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                      {isGD ? 'Players' : isCD ? 'Guests' : 'Members'}
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: DT.primary }}>{detailRoom.member_count} / {detailRoom.max_members}</span>
+                      <span style={{ fontSize: 11, color: DT.primary, fontWeight: 600 }}>
+                        {membersExpandedId === detailRoom.id ? 'Hide' : 'Show all'}
+                      </span>
+                      {membersExpandedId === detailRoom.id
+                        ? <ChevronUp size={13} style={{ color: DT.primary }} />
+                        : <ChevronDown size={13} style={{ color: DT.primary }} />}
+                    </div>
+                  </div>
+                  <div style={{ height: 6, background: DT.surface, borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 3, width: `${detailFill}%`, background: DT.primary, transition: 'width 600ms' }} />
+                  </div>
+                </button>
+
+                {membersExpandedId === detailRoom.id && (
+                  <div style={{ borderTop: `1px solid ${DT.border}`, padding: '10px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* Host always shown first */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', background: DT.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: DT.bg, fontFamily: '"Bricolage Grotesque",serif' }}>
+                          {(detailRoom.host_name || '?').charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: 13, fontWeight: 700, color: DT.text, margin: 0 }}>{detailRoom.host_name}</p>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: DT.primary, margin: 0 }}>Host</p>
+                      </div>
+                    </div>
+
+                    {membersLoadingId === detailRoom.id ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: DT.textMuted, padding: '6px 0' }}>
+                        <Loader size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                        <span style={{ fontSize: 12 }}>Loading members…</span>
+                      </div>
+                    ) : (membersData[detailRoom.id] ?? []).length === 0 ? (
+                      <p style={{ fontSize: 12, color: DT.textMuted, margin: '4px 0 0' }}>No other members have joined yet.</p>
+                    ) : (
+                      (membersData[detailRoom.id] ?? []).map(m => (
+                        <button
+                          key={m.user_id}
+                          onClick={() => handleViewApplicantProfile(m.user_id)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', width: '100%', textAlign: 'left', padding: '2px 0' }}
+                        >
+                          <div style={{ width: 34, height: 34, borderRadius: '50%', background: DT.surfaceAlt, border: `1.5px solid ${DT.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: DT.primary, fontFamily: '"Bricolage Grotesque",serif' }}>
+                              {(m.display_name || '?').charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: 13, fontWeight: 600, color: DT.text, margin: 0, flex: 1 }}>{m.display_name}</p>
+                          <span style={{ fontSize: 11, color: DT.primary, fontWeight: 600, opacity: 0.75 }}>View →</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Description */}
               {detailRoom.description && (
                 <div style={{ margin: '14px 20px 0', padding: '14px', background: DT.surfaceAlt, borderRadius: 16, border: `1px solid ${DT.border}` }}>
                   <pre style={{ fontSize: 13, color: DT.text, margin: 0, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{detailRoom.description}</pre>
+                </div>
+              )}
+
+              {/* Mobile number — tap to copy, only visible to members/owner */}
+              {mobileEntry && (
+                <div style={{ padding: '14px 20px 0' }}>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(mobileEntry.url).then(() => {
+                        setCopiedPhone(true);
+                        setTimeout(() => setCopiedPhone(false), 2000);
+                      });
+                    }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 12, border: `1.5px solid ${DT.primary}44`, background: `${DT.primary}10`, cursor: 'pointer', fontFamily: 'inherit', transition: 'background 150ms' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = `${DT.primary}20`)}
+                    onMouseLeave={e => (e.currentTarget.style.background = `${DT.primary}10`)}
+                  >
+                    <span style={{ fontSize: 15 }}>📱</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: DT.primary, letterSpacing: 0.3 }}>{mobileEntry.url}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: copiedPhone ? '#15803D' : DT.textMuted, marginLeft: 4, transition: 'color 200ms' }}>
+                      {copiedPhone ? '✓ Copied!' : 'Tap to copy'}
+                    </span>
+                  </button>
                 </div>
               )}
 

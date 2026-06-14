@@ -9,6 +9,7 @@ export interface RoomMessage {
   content: string;
   is_system: boolean;
   created_at: string;
+  edited_at?: string | null;
 }
 
 export interface RoomChatSummary {
@@ -47,7 +48,6 @@ export function useRoomMessages(roomId?: string) {
       }, payload => {
         const incoming = payload.new as RoomMessage;
         setMessages(prev => {
-          // Replace any matching optimistic placeholder; otherwise append
           const idx = prev.findIndex(m => m.id.startsWith('opt-') && m.sender_id === incoming.sender_id && m.content === incoming.content);
           if (idx !== -1) {
             const next = [...prev];
@@ -56,6 +56,18 @@ export function useRoomMessages(roomId?: string) {
           }
           return prev.some(m => m.id === incoming.id) ? prev : [...prev, incoming];
         });
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'room_messages',
+        filter: `room_id=eq.${roomId}`,
+      }, payload => {
+        setMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new as RoomMessage : m));
+      })
+      .on('postgres_changes', {
+        event: 'DELETE', schema: 'public', table: 'room_messages',
+        filter: `room_id=eq.${roomId}`,
+      }, payload => {
+        setMessages(prev => prev.filter(m => m.id !== payload.old.id));
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -90,7 +102,24 @@ export function useRoomMessages(roomId?: string) {
     }
   }, [roomId]);
 
-  return { messages, loading, sendMessage };
+  const updateRoomMessage = useCallback(async (msgId: string, content: string) => {
+    if (!content.trim()) return;
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('room_messages')
+      .update({ content: content.trim(), edited_at: now })
+      .eq('id', msgId);
+    if (error) {
+      await supabase.from('room_messages').update({ content: content.trim() }).eq('id', msgId);
+    }
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: content.trim(), edited_at: now } : m));
+  }, []);
+
+  const deleteRoomMessage = useCallback(async (msgId: string) => {
+    await supabase.from('room_messages').delete().eq('id', msgId);
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+  }, []);
+
+  return { messages, loading, sendMessage, updateRoomMessage, deleteRoomMessage };
 }
 
 /** Returns all confirmed PasaBuy rooms the user owns or is a member of, for the group chat list. */

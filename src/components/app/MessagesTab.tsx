@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Send, MessageSquare, UserPlus, Search, X, Loader, Users, Info } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowLeft, Send, MessageSquare, UserPlus, Search, X, Loader, Users, Info, MoreVertical } from 'lucide-react';
 import { useConversations, useChat } from '@/hooks/useMessages';
 import { useRoomChats, useRoomMessages } from '@/hooks/useRoomChat';
 import { useConnections } from '@/hooks/useConnections';
@@ -13,6 +13,11 @@ interface MessagesTabProps {
   userId?: string;
 }
 
+const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
+type ReactionGroup = { emoji: string; userIds: string[] };
+type ReactionsMap = Record<string, ReactionGroup[]>;
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const m = Math.floor(diff / 60000);
@@ -21,6 +26,115 @@ function timeAgo(iso: string): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h`;
   return `${Math.floor(h / 24)}d`;
+}
+
+async function loadReactionsFromDB(messageIds: string[], contextType: 'dm' | 'group'): Promise<ReactionsMap> {
+  if (!messageIds.length) return {};
+  try {
+    const { data } = await supabase.from('message_reactions')
+      .select('message_id, user_id, emoji')
+      .in('message_id', messageIds)
+      .eq('context_type', contextType);
+    if (!data) return {};
+    const grouped: ReactionsMap = {};
+    for (const r of data as { message_id: string; user_id: string; emoji: string }[]) {
+      if (!grouped[r.message_id]) grouped[r.message_id] = [];
+      const g = grouped[r.message_id].find(x => x.emoji === r.emoji);
+      if (g) g.userIds.push(r.user_id);
+      else grouped[r.message_id].push({ emoji: r.emoji, userIds: [r.user_id] });
+    }
+    return grouped;
+  } catch {
+    return {};
+  }
+}
+
+// ── Emoji picker popup ───────────────────────────────────────────────────────
+
+function EmojiPicker({ onPick, onClose, theme: T, align = 'left' }: { onPick: (e: string) => void; onClose: () => void; theme: Theme; align?: 'left' | 'right' }) {
+  return (
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 9900 }} onClick={onClose} />
+      <div style={{ position: 'absolute', bottom: '100%', ...(align === 'right' ? { right: 0 } : { left: 0 }), marginBottom: 6, zIndex: 9901, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 16, padding: '8px 10px', display: 'flex', gap: 4, boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
+        {QUICK_EMOJIS.map(e => (
+          <button key={e} onClick={() => { onPick(e); onClose(); }}
+            style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: 'transparent', fontSize: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 120ms' }}
+            onMouseEnter={ev => (ev.currentTarget.style.background = T.surfaceAlt)}
+            onMouseLeave={ev => (ev.currentTarget.style.background = 'transparent')}
+          >{e}</button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── Reactions bar ────────────────────────────────────────────────────────────
+
+function ReactionsBar({ reactions, userId, onToggle, theme: T }: { reactions: ReactionGroup[]; userId: string; onToggle: (emoji: string) => void; theme: Theme }) {
+  if (!reactions.length) return null;
+  return (
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+      {reactions.map(r => {
+        const mine = r.userIds.includes(userId);
+        return (
+          <button key={r.emoji} onClick={() => onToggle(r.emoji)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 20, border: `1.5px solid ${mine ? T.primary : T.border}`, background: mine ? `${T.primary}18` : T.surfaceAlt, cursor: 'pointer', fontSize: 13, fontWeight: 700, color: mine ? T.primary : T.textMuted, fontFamily: 'inherit', transition: 'all 120ms' }}>
+            {r.emoji} <span style={{ fontSize: 11 }}>{r.userIds.length}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Message action menu (⋮ button + dropdown) ────────────────────────────────
+
+function MenuBtn({ label, color, hoverBg, onClick }: { label: string; color: string; hoverBg: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: 'transparent', color, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background 100ms' }}
+      onMouseEnter={e => (e.currentTarget.style.background = hoverBg)}
+      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+    >{label}</button>
+  );
+}
+
+function MessageActions({ mine, side, isOpen, showEmoji, onToggle, onClose, onShowEmoji, onHideEmoji, onReact, onEdit, onDelete, theme: T }: {
+  mine: boolean; side: 'left' | 'right';
+  isOpen: boolean; showEmoji: boolean;
+  onToggle: () => void; onClose: () => void;
+  onShowEmoji: () => void; onHideEmoji: () => void;
+  onReact: (e: string) => void; onEdit: () => void; onDelete: () => void;
+  theme: Theme;
+}) {
+  return (
+    <div style={{ position: 'relative', flexShrink: 0, alignSelf: 'center' }}>
+      <button
+        onClick={ev => { ev.stopPropagation(); onToggle(); }}
+        style={{ width: 26, height: 26, borderRadius: 7, border: 'none', background: (isOpen || showEmoji) ? `${T.text}10` : 'transparent', color: T.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 120ms' }}
+        onMouseEnter={ev => (ev.currentTarget.style.background = `${T.text}10`)}
+        onMouseLeave={ev => { if (!isOpen && !showEmoji) ev.currentTarget.style.background = 'transparent'; }}
+      >
+        <MoreVertical size={15} />
+      </button>
+      {showEmoji && <EmojiPicker theme={T} align={side} onPick={e => { onReact(e); onHideEmoji(); }} onClose={onHideEmoji} />}
+      {isOpen && !showEmoji && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 8000 }} onClick={onClose} />
+          <div style={{ position: 'absolute', bottom: '100%', marginBottom: 4, ...(side === 'left' ? { left: 0 } : { right: 0 }), zIndex: 8001, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 12, padding: 4, minWidth: 130, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <MenuBtn label="😊  React" color={T.text} hoverBg={T.surfaceAlt} onClick={onShowEmoji} />
+            {mine && (
+              <>
+                <MenuBtn label="✏️  Edit" color={T.text} hoverBg={T.surfaceAlt} onClick={() => { onEdit(); onClose(); }} />
+                <div style={{ height: 1, background: T.border, margin: '2px 4px' }} />
+                <MenuBtn label="🗑️  Delete" color="#DC2626" hoverBg="#FEF2F2" onClick={() => { onDelete(); onClose(); }} />
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 // ── New conversation picker ──────────────────────────────────────────────────
@@ -82,14 +196,69 @@ function NewConvPicker({ userId, theme: T, onPick, onClose }: { userId: string; 
 
 // ── 1-on-1 chat view ─────────────────────────────────────────────────────────
 
-function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onBack }: { userId: string; partnerId: string; partnerName: string; partnerAvatar: string; theme: Theme; onBack: () => void }) {
-  const { messages, loading, sending, sendMessage } = useChat(userId, partnerId);
+function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onBack }: {
+  userId: string; partnerId: string; partnerName: string; partnerAvatar: string; theme: Theme; onBack: () => void;
+}) {
+  const { messages, loading, sending, sendMessage, updateMessage, deleteMessage } = useChat(userId, partnerId);
   const [draft, setDraft] = useState('');
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [showEmojiFor, setShowEmojiFor] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<ReactionsMap>({});
+  const [activeMenuMsgId, setActiveMenuMsgId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTouchStart = (msgId: string) => () => {
+    longPressRef.current = setTimeout(() => {
+      setActiveMenuMsgId(msgId);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50);
+    }, 500);
+  };
+  const handleTouchEnd = () => {
+    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
+  };
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (!messages.length) return;
+    loadReactionsFromDB(messages.map(m => m.id), 'dm').then(setReactions);
+  }, [messages.length]);
+
+  const toggleReaction = useCallback(async (msgId: string, emoji: string) => {
+    const current = reactions[msgId] ?? [];
+    const group = current.find(r => r.emoji === emoji);
+    const mine = group?.userIds.includes(userId);
+
+    setReactions(prev => {
+      const curr = prev[msgId] ?? [];
+      if (mine) {
+        return { ...prev, [msgId]: curr.map(r => r.emoji === emoji ? { ...r, userIds: r.userIds.filter(id => id !== userId) } : r).filter(r => r.userIds.length > 0) };
+      }
+      const found = curr.find(r => r.emoji === emoji);
+      if (found) return { ...prev, [msgId]: curr.map(r => r.emoji === emoji ? { ...r, userIds: [...r.userIds, userId] } : r) };
+      return { ...prev, [msgId]: [...curr, { emoji, userIds: [userId] }] };
+    });
+
+    try {
+      if (mine) {
+        await supabase.from('message_reactions').delete().eq('message_id', msgId).eq('user_id', userId).eq('emoji', emoji).eq('context_type', 'dm');
+      } else {
+        await supabase.from('message_reactions').insert({ message_id: msgId, context_type: 'dm', user_id: userId, emoji });
+      }
+    } catch {}
+  }, [reactions, userId]);
+
+  const startEdit = (msgId: string, content: string) => { setEditingMsgId(msgId); setEditDraft(content); setHoveredMsgId(null); setActiveMenuMsgId(null); };
+
+  const saveEdit = async () => {
+    if (!editingMsgId || !editDraft.trim()) return;
+    await updateMessage(editingMsgId, editDraft.trim());
+    setEditingMsgId(null);
+    setEditDraft('');
+  };
 
   const send = async () => {
     if (!draft.trim()) return;
@@ -111,7 +280,7 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
         </div>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: T.textMuted, gap: 8 }}>
             <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading…
@@ -124,12 +293,84 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
         ) : (
           messages.map(m => {
             const mine = m.sender_id === userId;
+            const isEditing = editingMsgId === m.id;
+            const msgReactions = reactions[m.id] ?? [];
+            const showMoreBtn = (hoveredMsgId === m.id || activeMenuMsgId === m.id || showEmojiFor === m.id) && !isEditing;
+            const menuOpen = activeMenuMsgId === m.id && showEmojiFor !== m.id;
+            const emojiOpen = showEmojiFor === m.id;
+
             return (
-              <div key={m.id} style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start' }}>
-                <div style={{ maxWidth: '75%', padding: '9px 13px', borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: mine ? T.primary : T.surfaceAlt, color: mine ? T.bg : T.text, fontSize: 14, lineHeight: 1.5, fontFamily: '"DM Sans",system-ui,sans-serif', wordBreak: 'break-word' }}>
-                  {m.content}
-                  <div style={{ fontSize: 10, opacity: 0.6, marginTop: 3, textAlign: 'right' }}>{timeAgo(m.created_at)}</div>
+              <div key={m.id} style={{ marginBottom: 6 }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'flex-end', justifyContent: mine ? 'flex-end' : 'flex-start', gap: 4 }}
+                  onMouseEnter={() => setHoveredMsgId(m.id)}
+                  onMouseLeave={() => { if (activeMenuMsgId !== m.id && showEmojiFor !== m.id) setHoveredMsgId(null); }}
+                  onTouchStart={handleTouchStart(m.id)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchMove={handleTouchEnd}
+                  onContextMenu={e => e.preventDefault()}
+                >
+                  {/* ⋮ on left — for own messages */}
+                  {mine && showMoreBtn && (
+                    <MessageActions mine={mine} side="right"
+                      isOpen={menuOpen} showEmoji={emojiOpen}
+                      onToggle={() => setActiveMenuMsgId(prev => prev === m.id ? null : m.id)}
+                      onClose={() => setActiveMenuMsgId(null)}
+                      onShowEmoji={() => { setShowEmojiFor(m.id); setActiveMenuMsgId(null); }}
+                      onHideEmoji={() => setShowEmojiFor(null)}
+                      onReact={e => toggleReaction(m.id, e)}
+                      onEdit={() => startEdit(m.id, m.content)}
+                      onDelete={() => deleteMessage(m.id)}
+                      theme={T}
+                    />
+                  )}
+
+                  {/* Bubble */}
+                  {isEditing ? (
+                    <div style={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <textarea
+                        value={editDraft}
+                        onChange={e => setEditDraft(e.target.value)}
+                        autoFocus rows={2}
+                        style={{ padding: '9px 13px', borderRadius: 16, border: `1.5px solid ${T.primary}`, background: T.bg, color: T.text, fontSize: 14, lineHeight: 1.5, fontFamily: '"DM Sans",system-ui,sans-serif', resize: 'none', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                      />
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button onClick={() => setEditingMsgId(null)} style={{ padding: '4px 12px', borderRadius: 8, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textMuted, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                        <button onClick={saveEdit} style={{ padding: '4px 12px', borderRadius: 8, border: 'none', background: T.primary, color: T.bg, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ maxWidth: '70%', padding: '9px 13px', borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: mine ? T.primary : T.surfaceAlt, color: mine ? T.bg : T.text, fontSize: 14, lineHeight: 1.5, fontFamily: '"DM Sans",system-ui,sans-serif', wordBreak: 'break-word' }}>
+                      {m.content}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 3 }}>
+                        {m.edited_at && <span style={{ fontSize: 9, opacity: 0.6, fontStyle: 'italic' }}>Edited</span>}
+                        <span style={{ fontSize: 10, opacity: 0.6 }}>{timeAgo(m.created_at)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ⋮ on right — for others' messages */}
+                  {!mine && showMoreBtn && (
+                    <MessageActions mine={mine} side="left"
+                      isOpen={menuOpen} showEmoji={emojiOpen}
+                      onToggle={() => setActiveMenuMsgId(prev => prev === m.id ? null : m.id)}
+                      onClose={() => setActiveMenuMsgId(null)}
+                      onShowEmoji={() => { setShowEmojiFor(m.id); setActiveMenuMsgId(null); }}
+                      onHideEmoji={() => setShowEmojiFor(null)}
+                      onReact={e => toggleReaction(m.id, e)}
+                      onEdit={() => startEdit(m.id, m.content)}
+                      onDelete={() => deleteMessage(m.id)}
+                      theme={T}
+                    />
+                  )}
                 </div>
+
+                {/* Reactions */}
+                {msgReactions.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', marginTop: 2 }}>
+                    <ReactionsBar reactions={msgReactions} userId={userId} onToggle={e => toggleReaction(m.id, e)} theme={T} />
+                  </div>
+                )}
               </div>
             );
           })
@@ -146,11 +387,8 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
           maxLength={1000}
           style={{ flex: 1, height: 44, padding: '0 14px', fontSize: 14, fontFamily: '"DM Sans",system-ui,sans-serif', border: `1.5px solid ${T.border}`, borderRadius: 22, background: T.bg, color: T.text, outline: 'none' }}
         />
-        <button
-          onClick={send}
-          disabled={!draft.trim() || sending}
-          style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: draft.trim() ? T.primary : T.border, color: draft.trim() ? T.bg : T.textMuted, cursor: draft.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 150ms' }}
-        >
+        <button onClick={send} disabled={!draft.trim() || sending}
+          style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: draft.trim() ? T.primary : T.border, color: draft.trim() ? T.bg : T.textMuted, cursor: draft.trim() ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 150ms' }}>
           {sending ? <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={16} />}
         </button>
       </div>
@@ -163,20 +401,35 @@ function ChatView({ userId, partnerId, partnerName, partnerAvatar, theme: T, onB
 function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T, onBack }: {
   userId: string; userName: string; roomId: string; roomName: string; joinCode: string; theme: Theme; onBack: () => void;
 }) {
-  const { messages, loading, sendMessage } = useRoomMessages(roomId);
+  const { messages, loading, sendMessage, updateRoomMessage, deleteRoomMessage } = useRoomMessages(roomId);
   const [draft, setDraft] = useState('');
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [showEmojiFor, setShowEmojiFor] = useState<string | null>(null);
+  const [reactions, setReactions] = useState<ReactionsMap>({});
+  const [activeMenuMsgId, setActiveMenuMsgId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Room detail + participants
-  const [room, setRoom]           = useState<Room | null>(null);
-  const [courier, setCourier]     = useState<{ id: string; name: string } | null>(null);
-  const [myRating, setMyRating]   = useState<BookingRating | null>(null);
+  const handleTouchStart = (msgId: string) => () => {
+    longPressRef.current = setTimeout(() => {
+      setActiveMenuMsgId(msgId);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50);
+    }, 500);
+  };
+  const handleTouchEnd = () => {
+    if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
+  };
 
-  // Modal state
-  const [showDetail, setShowDetail]   = useState(false);
-  const [showCancel, setShowCancel]   = useState(false);
-  const [showRating, setShowRating]   = useState(false);
-  const [actionBusy, setActionBusy]   = useState(false);
+  const [room, setRoom]         = useState<Room | null>(null);
+  const [courier, setCourier]   = useState<{ id: string; name: string } | null>(null);
+  const [myRating, setMyRating] = useState<BookingRating | null>(null);
+
+  const [showDetail, setShowDetail] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
+  const [showRating, setShowRating] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
 
   useEffect(() => {
     supabase.from('rooms').select('*').eq('id', roomId).maybeSingle()
@@ -189,10 +442,50 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const isOwner    = room?.user_id === userId;
+  useEffect(() => {
+    if (!messages.length) return;
+    const ids = messages.filter(m => !m.is_system).map(m => m.id);
+    if (!ids.length) return;
+    loadReactionsFromDB(ids, 'group').then(setReactions);
+  }, [messages.length]);
+
+  const toggleReaction = useCallback(async (msgId: string, emoji: string) => {
+    const current = reactions[msgId] ?? [];
+    const group = current.find(r => r.emoji === emoji);
+    const mine = group?.userIds.includes(userId);
+
+    setReactions(prev => {
+      const curr = prev[msgId] ?? [];
+      if (mine) {
+        return { ...prev, [msgId]: curr.map(r => r.emoji === emoji ? { ...r, userIds: r.userIds.filter(id => id !== userId) } : r).filter(r => r.userIds.length > 0) };
+      }
+      const found = curr.find(r => r.emoji === emoji);
+      if (found) return { ...prev, [msgId]: curr.map(r => r.emoji === emoji ? { ...r, userIds: [...r.userIds, userId] } : r) };
+      return { ...prev, [msgId]: [...curr, { emoji, userIds: [userId] }] };
+    });
+
+    try {
+      if (mine) {
+        await supabase.from('message_reactions').delete().eq('message_id', msgId).eq('user_id', userId).eq('emoji', emoji).eq('context_type', 'group');
+      } else {
+        await supabase.from('message_reactions').insert({ message_id: msgId, context_type: 'group', user_id: userId, emoji });
+      }
+    } catch {}
+  }, [reactions, userId]);
+
+  const startEdit = (msgId: string, content: string) => { setEditingMsgId(msgId); setEditDraft(content); setHoveredMsgId(null); setActiveMenuMsgId(null); };
+
+  const saveEdit = async () => {
+    if (!editingMsgId || !editDraft.trim()) return;
+    await updateRoomMessage(editingMsgId, editDraft.trim());
+    setEditingMsgId(null);
+    setEditDraft('');
+  };
+
+  const isOwner   = room?.user_id === userId;
   const roomStatus = room?.status ?? 'confirmed';
-  const isActive   = roomStatus === 'confirmed';
-  const isDone     = roomStatus === 'completed';
+  const isActive  = roomStatus === 'confirmed';
+  const isDone    = roomStatus === 'completed';
   const otherPartyId   = isOwner ? courier?.id   : room?.user_id;
   const otherPartyName = isOwner ? (courier?.name ?? 'Courier') : (room?.host_name ?? 'Requester');
 
@@ -241,7 +534,6 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
     await sendMessage(userId, userName, text);
   };
 
-  // Status badge for header
   const statusChip = isDone
     ? { label: 'Completed', bg: '#DCFCE7', color: '#15803D' }
     : roomStatus === 'cancelled'
@@ -267,14 +559,13 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
           </div>
           <p style={{ fontSize: 11, color: T.textMuted, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{roomName}</p>
         </div>
-        {/* Info / actions button */}
         <button onClick={() => setShowDetail(true)}
           style={{ width: 34, height: 34, borderRadius: '50%', border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Info size={15} />
         </button>
       </div>
 
-      {/* Courier rating prompt — shown to courier when booking is completed and not yet rated */}
+      {/* Courier rating prompt */}
       {isDone && !isOwner && !myRating && (
         <button onClick={() => setShowRating(true)}
           style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: 'linear-gradient(90deg,#D97706,#B45309)', border: 'none', cursor: 'pointer', fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
@@ -288,7 +579,7 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
       )}
 
       {/* Messages */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: T.textMuted, gap: 8 }}>
             <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Loading…
@@ -304,7 +595,7 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
               const isCancelMsg = m.content.startsWith('❌');
               const isDoneMsg   = m.content.startsWith('🎉');
               return (
-                <div key={m.id} style={{ display: 'flex', justifyContent: 'center' }}>
+                <div key={m.id} style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
                   <div style={{ maxWidth: '85%', padding: '8px 14px', borderRadius: 12, background: isCancelMsg ? '#FEF2F2' : isDoneMsg ? '#EDE9FE' : '#DCFCE7', border: `1px solid ${isCancelMsg ? '#FCA5A5' : isDoneMsg ? '#C4B5FD' : '#86EFAC'}`, fontSize: 12, color: isCancelMsg ? '#B91C1C' : isDoneMsg ? '#6D28D9' : '#15803D', fontFamily: '"DM Sans",system-ui,sans-serif', textAlign: 'center', lineHeight: 1.5 }}>
                     {m.content}
                     <div style={{ fontSize: 10, opacity: 0.6, marginTop: 3 }}>{timeAgo(m.created_at)}</div>
@@ -312,14 +603,87 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
                 </div>
               );
             }
+
             const mine = m.sender_id === userId;
+            const isEditing = editingMsgId === m.id;
+            const msgReactions = reactions[m.id] ?? [];
+            const showMoreBtn = (hoveredMsgId === m.id || activeMenuMsgId === m.id || showEmojiFor === m.id) && !isEditing;
+            const menuOpen = activeMenuMsgId === m.id && showEmojiFor !== m.id;
+            const emojiOpen = showEmojiFor === m.id;
+
             return (
-              <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start' }}>
+              <div key={m.id} style={{ marginBottom: 6 }}>
                 {!mine && m.sender_name && <p style={{ fontSize: 11, color: T.textMuted, margin: '0 0 3px 4px', fontWeight: 600 }}>{m.sender_name}</p>}
-                <div style={{ maxWidth: '75%', padding: '9px 13px', borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: mine ? T.primary : T.surfaceAlt, color: mine ? T.bg : T.text, fontSize: 14, lineHeight: 1.5, fontFamily: '"DM Sans",system-ui,sans-serif', wordBreak: 'break-word' }}>
-                  {m.content}
-                  <div style={{ fontSize: 10, opacity: 0.6, marginTop: 3, textAlign: 'right' }}>{timeAgo(m.created_at)}</div>
+                <div
+                  style={{ display: 'flex', alignItems: 'flex-end', justifyContent: mine ? 'flex-end' : 'flex-start', gap: 4 }}
+                  onMouseEnter={() => setHoveredMsgId(m.id)}
+                  onMouseLeave={() => { if (activeMenuMsgId !== m.id && showEmojiFor !== m.id) setHoveredMsgId(null); }}
+                  onTouchStart={handleTouchStart(m.id)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchMove={handleTouchEnd}
+                  onContextMenu={e => e.preventDefault()}
+                >
+                  {/* ⋮ on left — for own messages */}
+                  {mine && showMoreBtn && (
+                    <MessageActions mine={mine} side="right"
+                      isOpen={menuOpen} showEmoji={emojiOpen}
+                      onToggle={() => setActiveMenuMsgId(prev => prev === m.id ? null : m.id)}
+                      onClose={() => setActiveMenuMsgId(null)}
+                      onShowEmoji={() => { setShowEmojiFor(m.id); setActiveMenuMsgId(null); }}
+                      onHideEmoji={() => setShowEmojiFor(null)}
+                      onReact={e => toggleReaction(m.id, e)}
+                      onEdit={() => startEdit(m.id, m.content)}
+                      onDelete={() => deleteRoomMessage(m.id)}
+                      theme={T}
+                    />
+                  )}
+
+                  {/* Bubble */}
+                  {isEditing ? (
+                    <div style={{ maxWidth: '70%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <textarea
+                        value={editDraft}
+                        onChange={e => setEditDraft(e.target.value)}
+                        autoFocus rows={2}
+                        style={{ padding: '9px 13px', borderRadius: 16, border: `1.5px solid ${T.primary}`, background: T.bg, color: T.text, fontSize: 14, lineHeight: 1.5, fontFamily: '"DM Sans",system-ui,sans-serif', resize: 'none', outline: 'none', width: '100%', boxSizing: 'border-box' }}
+                      />
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <button onClick={() => setEditingMsgId(null)} style={{ padding: '4px 12px', borderRadius: 8, border: `1.5px solid ${T.border}`, background: T.surfaceAlt, color: T.textMuted, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                        <button onClick={saveEdit} style={{ padding: '4px 12px', borderRadius: 8, border: 'none', background: T.primary, color: T.bg, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ maxWidth: '70%', padding: '9px 13px', borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px', background: mine ? T.primary : T.surfaceAlt, color: mine ? T.bg : T.text, fontSize: 14, lineHeight: 1.5, fontFamily: '"DM Sans",system-ui,sans-serif', wordBreak: 'break-word' }}>
+                      {m.content}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 3 }}>
+                        {m.edited_at && <span style={{ fontSize: 9, opacity: 0.6, fontStyle: 'italic' }}>Edited</span>}
+                        <span style={{ fontSize: 10, opacity: 0.6 }}>{timeAgo(m.created_at)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ⋮ on right — for others' messages */}
+                  {!mine && showMoreBtn && (
+                    <MessageActions mine={mine} side="left"
+                      isOpen={menuOpen} showEmoji={emojiOpen}
+                      onToggle={() => setActiveMenuMsgId(prev => prev === m.id ? null : m.id)}
+                      onClose={() => setActiveMenuMsgId(null)}
+                      onShowEmoji={() => { setShowEmojiFor(m.id); setActiveMenuMsgId(null); }}
+                      onHideEmoji={() => setShowEmojiFor(null)}
+                      onReact={e => toggleReaction(m.id, e)}
+                      onEdit={() => startEdit(m.id, m.content)}
+                      onDelete={() => deleteRoomMessage(m.id)}
+                      theme={T}
+                    />
+                  )}
                 </div>
+
+                {/* Reactions */}
+                {msgReactions.length > 0 && (
+                  <div style={{ display: 'flex', justifyContent: mine ? 'flex-end' : 'flex-start', marginTop: 2 }}>
+                    <ReactionsBar reactions={msgReactions} userId={userId} onToggle={e => toggleReaction(m.id, e)} theme={T} />
+                  </div>
+                )}
               </div>
             );
           })
@@ -327,7 +691,7 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
         <div ref={bottomRef} />
       </div>
 
-      {/* Input — disabled when not active */}
+      {/* Input */}
       <div style={{ flexShrink: 0, display: 'flex', gap: 8, padding: '12px 16px', background: T.surface, borderTop: `1.5px solid ${T.border}` }}>
         <input
           value={draft}
@@ -346,16 +710,14 @@ function GroupChatView({ userId, userName, roomId, roomName, joinCode, theme: T,
 
       {/* Modals */}
       {showDetail && room && (
-        <BookingDetailSheet
-          room={room} isOwner={isOwner} courierName={courier?.name ?? 'Courier'} theme={T}
+        <BookingDetailSheet room={room} isOwner={isOwner} courierName={courier?.name ?? 'Courier'} theme={T}
           onClose={() => setShowDetail(false)}
           onCancel={() => { setShowDetail(false); setShowCancel(true); }}
           onComplete={handleMarkComplete}
         />
       )}
       {showCancel && (
-        <CancelModal theme={T} submitting={actionBusy}
-          onConfirm={handleCancel} onClose={() => setShowCancel(false)} />
+        <CancelModal theme={T} submitting={actionBusy} onConfirm={handleCancel} onClose={() => setShowCancel(false)} />
       )}
       {showRating && (
         <RatingModal
@@ -453,10 +815,8 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
           <p className="font-pixel" style={{ fontSize: 13, color: T.accent, margin: '0 0 2px', letterSpacing: 1 }}>DIRECT MESSAGES</p>
           <h2 className="font-display" style={{ fontSize: 22, fontWeight: 800, color: T.text, margin: 0 }}>Messages</h2>
         </div>
-        <button
-          onClick={() => setShowPicker(true)}
-          style={{ height: 38, padding: '0 16px', borderRadius: 19, border: 'none', background: T.primary, color: T.bg, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-        >
+        <button onClick={() => setShowPicker(true)}
+          style={{ height: 38, padding: '0 16px', borderRadius: 19, border: 'none', background: T.primary, color: T.bg, fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Send size={13} /> New
         </button>
       </div>
@@ -466,7 +826,6 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
           <ConversationsSkeleton theme={T} />
         ) : (
           <>
-            {/* ── Group / Tracking GCs ─────────────────────────────────────── */}
             {groupChats.length > 0 && (
               <>
                 <div style={{ padding: '4px 12px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -501,7 +860,6 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
               </>
             )}
 
-            {/* ── DMs ──────────────────────────────────────────────────────── */}
             {conversations.length === 0 && groupChats.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '48px 24px', border: `2px dashed ${T.border}`, borderRadius: 16, margin: '8px', color: T.textMuted }}>
                 <MessageSquare size={36} style={{ display: 'block', margin: '0 auto 12px', opacity: 0.35 }} />

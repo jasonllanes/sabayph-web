@@ -9,7 +9,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { CATEGORIES, CATEGORY_DETAILS, THEMES } from '@/data/themes';
 import { PixelHeart } from '@/components/common/PixelDecorations';
-import { useExploreRooms } from '@/hooks/useExploreRooms';
+import { useExploreRooms, type HostProfile } from '@/hooks/useExploreRooms';
+import { getDefaultAvatar } from '@/components/app/tagConstants';
 import type { CategoryId, Theme } from '@/types';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -72,6 +73,7 @@ function fmtNeededBy(iso: string | null): string {
 interface RoomCardProps {
   room: Room;
   userId?: string;
+  hostProfile?: HostProfile;
   outerTheme: { border: string; text: string; surface: string; surfaceAlt: string; primary: string; bg: string; textMuted: string; accent: string };
   reqState: string;
   requestingId: string | null;
@@ -84,10 +86,20 @@ interface RoomCardProps {
   onOpenDetail: () => void;
 }
 
-function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, requestMsg, joinError, onRequestMsg, onOpenRequest, onSendRequest, onCancelRequest, onOpenDetail }: RoomCardProps) {
+function RoomCard({ room, userId, hostProfile, outerTheme: T, reqState, requestingId, requestMsg, joinError, onRequestMsg, onOpenRequest, onSendRequest, onCancelRequest, onOpenDetail }: RoomCardProps) {
   const cat = CAT_STYLE[room.category] ?? CAT_STYLE.rotary;
   const CatIcon = cat.Icon;
   const isOwn = userId === room.user_id;
+  const avatarSrc = hostProfile?.avatar_url || getDefaultAvatar(hostProfile?.gender, hostProfile?.profile_tags);
+  const createdAgo = (() => {
+    const diff = Date.now() - new Date(room.created_at).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  })();
   const isOpen = requestingId === room.id;
   const pct = Math.min(100, Math.round((room.member_count / room.max_members) * 100));
   // On dark surfaces cat.headerBg can be darker than the surface itself (e.g. Gaming #1E1B4B on #142536)
@@ -128,35 +140,38 @@ function RoomCard({ room, userId, outerTheme: T, reqState, requestingId, request
       onMouseEnter={e => { (e.currentTarget.style.boxShadow = `6px 6px 0 ${cat.headerBg}55`); (e.currentTarget.style.transform = 'translateY(-1px)'); }}
       onMouseLeave={e => { (e.currentTarget.style.boxShadow = `4px 4px 0 ${cat.headerBg}22`); (e.currentTarget.style.transform = 'none'); }}
     >
-      {/* ── Colored header — tap to view full details ── */}
+      {/* ── Host row ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: T.primary, border: `2px solid ${T.border}`, overflow: 'hidden', position: 'relative', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: T.bg, position: 'absolute', fontFamily: '"Bricolage Grotesque",serif', zIndex: 0 }}>
+            {(room.host_name ?? '?').charAt(0).toUpperCase()}
+          </span>
+          <img src={avatarSrc} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }}
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{room.host_name}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, background: cat.badgeBg, color: cat.badgeText, padding: '2px 8px', borderRadius: 8, textTransform: 'capitalize' as const }}>
+          <CatIcon size={9} />{room.category}
+        </span>
+        {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, background: T.surfaceAlt, color: T.textMuted, padding: '2px 7px', borderRadius: 8, border: `1px solid ${T.border}` }}><Lock size={8} />Private</span>}
+        {room.status === 'live' && <span style={{ fontSize: 10, fontWeight: 800, background: '#C82718', color: '#fff', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
+        <span style={{ fontSize: 11, color: T.textMuted, marginLeft: 'auto', flexShrink: 0 }}>{createdAgo}</span>
+      </div>
+
+      {/* ── Room name + category image — tap to view full details ── */}
       <div
         onClick={onOpenDetail}
         role="button"
         tabIndex={0}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onOpenDetail(); }}
-        style={{ background: cat.headerBg, padding: '14px 16px 12px', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, cursor: 'pointer' }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 14px 4px', cursor: 'pointer' }}
       >
-        {/* Grid pattern */}
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.08, backgroundImage: 'linear-gradient(rgba(255,255,255,0.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.8) 1px,transparent 1px)', backgroundSize: '14px 14px', pointerEvents: 'none' }} />
-
-        <div style={{ position: 'relative', flex: 1 }}>
-          {/* Badges row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6, flexWrap: 'wrap' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 800, background: cat.badgeBg, color: cat.badgeText, padding: '2px 8px', borderRadius: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              <CatIcon size={9} />{room.category}
-            </span>
-            {room.status === 'live' && <span style={{ fontSize: 9, fontWeight: 800, background: '#C82718', color: '#fff', padding: '2px 8px', borderRadius: 8 }}>LIVE</span>}
-            {room.is_private && <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 700, background: 'rgba(0,0,0,0.3)', color: cat.headerText, padding: '2px 7px', borderRadius: 8 }}><Lock size={8} />PRIVATE</span>}
-          </div>
-
-          <h3 style={{ fontFamily: '"Bricolage Grotesque",serif', fontSize: 16, fontWeight: 800, color: cat.headerText, margin: '0 0 2px', lineHeight: 1.2, letterSpacing: '-0.01em' }}>
-            {room.name}
-          </h3>
-          <p style={{ fontSize: 11, color: `${cat.headerText}aa`, margin: 0, fontWeight: 500 }}>by {room.host_name}</p>
+        <h3 style={{ fontFamily: '"Bricolage Grotesque",serif', fontSize: 17, fontWeight: 800, color: T.text, margin: 0, lineHeight: 1.2, letterSpacing: '-0.01em', flex: 1 }}>
+          {room.name}
+        </h3>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: `${cat.headerBg}18`, border: `1.5px solid ${cat.headerBg}33`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <img src={cat.image} alt="" style={{ width: 32, height: 32, objectFit: 'contain', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.2))' }} />
         </div>
-
-        {/* Category image */}
-        <img src={cat.image} alt="" style={{ width: 52, height: 52, objectFit: 'contain', flexShrink: 0, position: 'relative', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }} />
       </div>
 
       {/* ── Card body ── */}
@@ -329,7 +344,7 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
     );
   };
 
-  const { rooms, roomsWithCoords, locationGroups, loading, total } =
+  const { rooms, roomsWithCoords, locationGroups, loading, total, hostProfiles } =
     useExploreRooms(search, category, center, radiusKm);
 
   // Show all rooms by default; filter by location group or map center when active.
@@ -601,6 +616,7 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
                   key={room.id}
                   room={room}
                   userId={userId}
+                  hostProfile={hostProfiles[room.user_id]}
                   outerTheme={THEMES[room.category as keyof typeof THEMES] ?? T}
                   reqState={requestStates[room.id] ?? 'none'}
                   requestingId={requestingId}
@@ -724,7 +740,7 @@ const [mapDialogOpen, setMapDialogOpen] = useState(false);
           dr.facebook_url  && { url: dr.facebook_url,  Icon: FacebookIcon,  color: '#1877F2' },
           dr.instagram_url && { url: dr.instagram_url, Icon: InstagramIcon, color: '#E4405F' },
           dr.twitter_url   && { url: dr.twitter_url,   Icon: TwitterIcon,   color: '#1DA1F2' },
-          ...(dr.other_socials ?? []).filter(s => s.url).map(s => ({ url: s.url, Icon: null, label: s.label, color: accentColor })),
+          ...(dr.other_socials ?? []).filter(s => s.url && s.label !== 'Mobile').map(s => ({ url: s.url, Icon: null, label: s.label, color: accentColor })),
         ].filter(Boolean) as { url: string; Icon: any; color: string; label?: string }[];
 
         return (

@@ -211,10 +211,6 @@ function Step1({ data, set, T }: { data: PasaBuyWizardData; set: <K extends keyo
         <input style={inp} value={data.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Pabili sa SM City Davao" />
       </div>
       <div>
-        <label style={lbl}>YOUR NAME *</label>
-        <input style={inp} value={data.host_name} onChange={e => set('host_name', e.target.value)} placeholder="Who is requesting?" />
-      </div>
-      <div>
         <label style={lbl}>ADDITIONAL NOTES</label>
         <textarea
           style={{ ...inp, height: 72, padding: '10px 14px', resize: 'vertical' }}
@@ -648,7 +644,6 @@ function Step6({ data, set, T, userId }: { data: PasaBuyWizardData; set: <K exte
   const { profile } = useProfile(userId);
   const [applied, setApplied] = useState(false);
 
-  // Mobile number stored in other_socials with label 'Mobile'
   const mobileEntry = data.other_socials.find(s => s.label === 'Mobile');
   const mobileValue = mobileEntry?.url ?? '';
   const setMobile = (val: string) => {
@@ -672,42 +667,55 @@ function Step6({ data, set, T, userId }: { data: PasaBuyWizardData; set: <K exte
   const removeOther = (id: string) =>
     set('other_socials', data.other_socials.filter(s => s.id !== id));
 
-  // Custom socials excluding the reserved Mobile entry
   const customSocials = data.other_socials.filter(s => s.label !== 'Mobile');
+  const hasMobile = !!mobileValue.trim();
+  const hasSocial = !!(data.facebook_url.trim() || data.instagram_url.trim() || data.twitter_url.trim());
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <p style={{ fontSize: 12, color: T.textMuted, margin: 0, lineHeight: 1.5 }}>
-        Where can the buyer reach you to confirm details? Auto-filled from your profile if set.
+        A mobile number and at least one social media link are <strong style={{ color: T.text }}>required</strong> so the buyer can reach you.
       </p>
 
       {/* Mobile number — dedicated row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: '#16A34A18', border: '1.5px solid #16A34A44', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 17 }}>
-          📱
+      <div>
+        <label style={lbl}>MOBILE NUMBER *</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#16A34A18', border: '1.5px solid #16A34A44', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 17 }}>
+            📱
+          </div>
+          <input
+            style={{ ...inp, flex: 1, borderColor: !hasMobile ? '#FCA5A5' : inp.border as string }}
+            type="tel"
+            value={mobileValue}
+            onChange={e => setMobile(e.target.value)}
+            placeholder="e.g. 09123456789"
+          />
         </div>
-        <input
-          style={{ ...inp, flex: 1 }}
-          type="tel"
-          value={mobileValue}
-          onChange={e => setMobile(e.target.value)}
-          placeholder="e.g. 09123456789"
-        />
+        {!hasMobile && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Required.</p>}
       </div>
 
-      {[
-        { key: 'facebook_url' as const, Icon: FacebookIcon, ph: 'https://facebook.com/yourpage', color: '#1877F2' },
-        { key: 'instagram_url' as const, Icon: InstagramIcon, ph: 'https://instagram.com/yourhandle', color: '#E4405F' },
-        { key: 'twitter_url' as const, Icon: TwitterIcon, ph: 'https://x.com/yourhandle', color: '#1DA1F2' },
-      ].map(({ key, Icon, ph, color }) => (
-        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}18`, border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon size={16} color={color} />
-          </div>
-          <input style={{ ...inp, flex: 1 }} value={data[key]} onChange={e => set(key, e.target.value)} placeholder={ph} />
+      {/* Social links */}
+      <div style={{ paddingTop: 4, borderTop: `1px solid ${T.border}` }}>
+        <label style={{ ...lbl, marginBottom: 10 }}>SOCIAL MEDIA * <span style={{ fontSize: 10, fontWeight: 500, color: T.textMuted }}>(at least one)</span></label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[
+            { key: 'facebook_url' as const, Icon: FacebookIcon, ph: 'https://facebook.com/yourpage', color: '#1877F2' },
+            { key: 'instagram_url' as const, Icon: InstagramIcon, ph: 'https://instagram.com/yourhandle', color: '#E4405F' },
+            { key: 'twitter_url' as const, Icon: TwitterIcon, ph: 'https://x.com/yourhandle', color: '#1DA1F2' },
+          ].map(({ key, Icon, ph, color }) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}18`, border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={16} color={color} />
+              </div>
+              <input style={{ ...inp, flex: 1 }} value={data[key]} onChange={e => set(key, e.target.value)} placeholder={ph} />
+            </div>
+          ))}
         </div>
-      ))}
+        {!hasSocial && <p style={{ fontSize: 11, color: '#C82718', margin: '6px 0 0' }}>At least one social media link is required.</p>}
+      </div>
 
+      {/* Other contact links */}
       <div style={{ paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
         <label style={{ ...lbl, display: 'flex', alignItems: 'center', gap: 6 }}>
           <Link size={11} /> OTHER CONTACT LINKS
@@ -790,10 +798,16 @@ export default function PasaBuyWizard({ theme: T, editing, userId, onClose, onCr
   const set = <K extends keyof PasaBuyWizardData>(k: K, v: PasaBuyWizardData[K]) =>
     setData(prev => ({ ...prev, [k]: v }));
 
+  const { profile: creatorProfile } = useProfile(userId);
+  useEffect(() => {
+    if (!editing && creatorProfile?.display_name && !data.host_name) {
+      setData(prev => ({ ...prev, host_name: creatorProfile.display_name! }));
+    }
+  }, [creatorProfile?.display_name, editing]);
+
   const validate = (): string => {
     if (step === 0) {
       if (!data.name.trim()) return 'Request name is required.';
-      if (!data.host_name.trim()) return 'Your name is required.';
     }
     if (step === 1 && data.items.length === 0) return 'Add at least one item to your shopping list.';
     if (step === 1 && data.items.some(it => !it.name.trim())) return 'All items need a name.';
@@ -802,6 +816,12 @@ export default function PasaBuyWizard({ theme: T, editing, userId, onClose, onCr
     if (step === 2 && !data.dropoff_location) return 'Please pin a dropoff location.';
     if (step === 3 && data.goods_budget <= 0) return 'Please enter an estimated goods budget.';
     if (step === 4 && data.is_private && !data.password.trim()) return 'Enter a password for the private room.';
+    if (step === STEPS.length - 1) {
+      const hasMobile = data.other_socials.some(s => s.label === 'Mobile' && s.url.trim());
+      const hasSocial = !!(data.facebook_url.trim() || data.instagram_url.trim() || data.twitter_url.trim());
+      if (!hasMobile) return 'Please add your mobile number so the buyer can reach you.';
+      if (!hasSocial) return 'Please add at least one social media link (Facebook, Instagram, or Twitter/X).';
+    }
     return '';
   };
 

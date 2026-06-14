@@ -2,6 +2,12 @@ import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Room, CategoryId } from '@/types';
 
+export interface HostProfile {
+  gender: string | null;
+  profile_tags: string[] | null;
+  avatar_url: string | null;
+}
+
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -26,6 +32,7 @@ export function useExploreRooms(
   radiusKm: number,
 ) {
   const [allRooms, setAllRooms] = useState<Room[]>([]);
+  const [hostProfiles, setHostProfiles] = useState<Record<string, HostProfile>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,7 +43,21 @@ export function useExploreRooms(
         .select('*')
         .order('created_at', { ascending: false })
         .limit(500);
-      setAllRooms((data as Room[]) ?? []);
+      const rooms = (data as Room[]) ?? [];
+      setAllRooms(rooms);
+
+      const uniqueHostIds = [...new Set(rooms.map(r => r.user_id).filter(Boolean))];
+      if (uniqueHostIds.length) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, gender, profile_tags, avatar_url')
+          .in('id', uniqueHostIds);
+        const map: Record<string, HostProfile> = {};
+        for (const p of (profiles ?? []) as (HostProfile & { id: string })[]) {
+          map[p.id] = { gender: p.gender, profile_tags: p.profile_tags, avatar_url: p.avatar_url };
+        }
+        setHostProfiles(map);
+      }
       setLoading(false);
     })();
   }, []);
@@ -81,5 +102,5 @@ export function useExploreRooms(
     [filtered],
   );
 
-  return { rooms: filtered, roomsWithCoords, locationGroups, loading, total: allRooms.length };
+  return { rooms: filtered, roomsWithCoords, locationGroups, loading, total: allRooms.length, hostProfiles };
 }

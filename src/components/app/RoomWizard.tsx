@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import { X, ChevronLeft, ChevronRight, Plus, Trash2, Check, Lock, Unlock, Copy, Share2, MapPin, Calendar, Clock, Users, Link, Phone } from 'lucide-react';
 import { useProfile } from '@/hooks/useProfile';
-import { FacebookIcon, InstagramIcon, TwitterIcon } from '@/components/common/SocialIcons';
 import { supabase } from '@/lib/supabase';
 import type { Theme, Room, ItineraryItem, OtherSocial } from '@/types';
 import type { MapLocation, MapPickerTheme } from '@/components/common/MapPicker';
@@ -444,46 +444,52 @@ function Step5({ data, set, T, userId }: { data: WizardData; set: <K extends key
   const removeOther = (id: string) =>
     set('other_socials', data.other_socials.filter(s => s.id !== id));
 
-  const hasContact = data.facebook_url.trim() || data.instagram_url.trim() || data.twitter_url.trim() || mobile.trim();
-  const reqStar = <span style={{ color: '#C82718', marginLeft: 2 }}>*</span>;
+  const hasMobile = !!mobile.trim();
+  const hasSocial = !!(data.facebook_url.trim() || data.instagram_url.trim() || data.twitter_url.trim());
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <p style={{ fontSize: 12, color: T.textMuted, margin: 0, lineHeight: 1.5 }}>
-        A mobile number or at least one social media link is <strong style={{ color: T.text }}>required</strong> so members can reach you.
+        A mobile number and at least one social media link are <strong style={{ color: T.text }}>required</strong> so members can reach you.
       </p>
 
       {/* Mobile Number */}
       <div>
-        <label style={lbl}>MOBILE NUMBER {reqStar}</label>
+        <label style={lbl}>MOBILE NUMBER *</label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: '#10B98118', border: '1.5px solid #10B98144', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Phone size={16} color="#10B981" />
           </div>
           <input
-            style={{ ...inp, flex: 1, borderColor: !hasContact ? '#FCA5A5' : inp.border as string }}
+            style={{ ...inp, flex: 1, borderColor: !hasMobile ? '#FCA5A5' : inp.border as string }}
             value={mobile}
             onChange={e => updateMobile(e.target.value)}
             placeholder="+63 912 345 6789"
             type="tel"
           />
         </div>
-        {!hasContact && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Required if no social media link is provided.</p>}
+        {!hasMobile && <p style={{ fontSize: 11, color: '#C82718', margin: '3px 0 0' }}>Required.</p>}
       </div>
 
       {/* Social links */}
-      {[
-        { key: 'facebook_url' as const, Icon: FacebookIcon, label: 'Facebook', ph: 'https://facebook.com/yourpage', color: '#1877F2' },
-        { key: 'instagram_url' as const, Icon: InstagramIcon, label: 'Instagram', ph: 'https://instagram.com/yourhandle', color: '#E4405F' },
-        { key: 'twitter_url' as const, Icon: TwitterIcon, label: 'Twitter / X', ph: 'https://x.com/yourhandle', color: '#1DA1F2' },
-      ].map(({ key, Icon, ph, color }) => (
-        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}18`, border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon size={16} color={color} />
-          </div>
-          <input style={{ ...inp, flex: 1 }} value={data[key]} onChange={e => set(key, e.target.value)} placeholder={ph} />
+      <div style={{ paddingTop: 4, borderTop: `1px solid ${T.border}` }}>
+        <label style={{ ...lbl, marginBottom: 10 }}>SOCIAL MEDIA * <span style={{ fontSize: 10, fontWeight: 500, color: T.textMuted }}>(at least one)</span></label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[
+            { key: 'facebook_url' as const, Icon: FacebookIcon, ph: 'https://facebook.com/yourpage', color: '#1877F2' },
+            { key: 'instagram_url' as const, Icon: InstagramIcon, ph: 'https://instagram.com/yourhandle', color: '#E4405F' },
+            { key: 'twitter_url' as const, Icon: TwitterIcon, ph: 'https://x.com/yourhandle', color: '#1DA1F2' },
+          ].map(({ key, Icon, ph, color }) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: `${color}18`, border: `1.5px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Icon size={16} color={color} />
+              </div>
+              <input style={{ ...inp, flex: 1 }} value={data[key]} onChange={e => set(key, e.target.value)} placeholder={ph} />
+            </div>
+          ))}
         </div>
-      ))}
+        {!hasSocial && <p style={{ fontSize: 11, color: '#C82718', margin: '6px 0 0' }}>At least one social media link is required.</p>}
+      </div>
 
       {/* Others */}
       <div style={{ paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
@@ -626,9 +632,9 @@ export default function RoomWizard({ theme: T, editing, initialCategory, userId,
     }
     if (step === STEPS_LIST.length - 1) {
       const hasMobile = data.other_socials.some(s => s.label === 'Mobile' && s.url.trim());
-      if (!data.facebook_url.trim() && !data.instagram_url.trim() && !data.twitter_url.trim() && !hasMobile) {
-        return 'Please add at least one social media link or a mobile number so members can reach you.';
-      }
+      const hasSocial = !!(data.facebook_url.trim() || data.instagram_url.trim() || data.twitter_url.trim());
+      if (!hasMobile) return 'Please add your mobile number so members can reach you.';
+      if (!hasSocial) return 'Please add at least one social media link (Facebook, Instagram, or Twitter/X).';
     }
     return '';
   };
