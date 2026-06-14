@@ -874,6 +874,10 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
       .then(({ data }) => setUserName(data?.display_name ?? 'Kasama'));
   }, [userId]);
 
+  const handleRefreshInbox = useCallback(async () => {
+    await Promise.all([refreshDMs(), refreshGCs()]);
+  }, [refreshDMs, refreshGCs]);
+
   if (activeChat && userId) {
     if (activeChat.kind === 'group') {
       return (
@@ -907,10 +911,6 @@ export default function MessagesTab({ theme: T, userId }: MessagesTabProps) {
   }
 
   const loading = dmLoading || gcLoading;
-
-  const handleRefreshInbox = useCallback(async () => {
-    await Promise.all([refreshDMs(), refreshGCs()]);
-  }, [refreshDMs, refreshGCs]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
